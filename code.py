@@ -119,6 +119,9 @@ keycode_map = {
     "F10": (Keycode.F10, False),
     "F11": (Keycode.F11, False),
     "F12": (Keycode.F12, False),
+    "TAB": (Keycode.TAB, False),
+    "ENTER": (Keycode.ENTER, False),
+    "SPACE": (Keycode.SPACE, False),
     # Add more key mappings as needed
 }
 
@@ -160,6 +163,18 @@ while True:
                     keyboard.release_all()
             else:
                 print(f"Invalid key: {key}")
+                
+       elif "typing" in request_str:
+            text = request_str.split("=")[1].strip()
+            print(f"Typing text: {text}")
+            keyboard_layout = KeyboardLayout.US
+            for char in text:
+                if char in keyboard_layout:
+                    keycode = keyboard_layout[char]
+                    keyboard.press(keycode)
+                    keyboard.release_all()
+                else:
+                    print(f"Invalid character: {char}")
 
         # Check if the request contains "mouse"
         elif "mouse" in request_str:
