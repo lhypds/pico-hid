@@ -31,3 +31,10 @@ Setup
    Re-power it.
 
 Done.  
+
+
+How To Use
+----------
+
+Scan the local network, and find the board IP.  
+Send POST request to the board IP, port 8080, with raw text: `keycode=your_key_code` to trigger key input.  
