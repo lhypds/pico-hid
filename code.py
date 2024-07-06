@@ -142,7 +142,9 @@ while True:
         buffer = bytearray(1024)
         bytes_received = client_socket.recv_into(buffer)
         request_str = str(buffer[:bytes_received], 'utf8')
-        print(f"Received: {request_str}")
+        
+        # Debug request
+        #print(f"Received: {request_str}")
 
         # Check if the request contains "keycode"
         if "keycode" in request_str:
