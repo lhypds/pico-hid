@@ -169,13 +169,7 @@ while True:
         elif "typing" in request_str:
             text = request_str.split("=")[1].strip()
             print(f"Typing text: {text}")
-            for char in text:
-                if char in keyboard_layout.keycodes:
-                    keycode = keyboard_layout.keycodes[char]
-                    keyboard.press(keycode)
-                    keyboard.release(keycode)
-                else:
-                    print(f"Invalid character: {char}")
+            keyboard_layout.write(text)
 
         # Check if the request contains "mouse"
         elif "mouse" in request_str:
