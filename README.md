@@ -3,7 +3,7 @@ Pico HID Keyboard
 =================
 
 
-A small server running on Raspberry Pi Pico W, receive requests and simulate keyborad/mouse input to the machine connected to it.
+A small server running on Raspberry Pi Pico W, receive requests and simulate keyborad/mouse input to the machine connected to it.  
 It can be used to remote control another machine mouse and keybaord from hardware level.  
 
 
