@@ -63,7 +63,7 @@ server_socket.setsockopt(pool.SOL_SOCKET, pool.SO_REUSEADDR, 1)
 server_socket.bind((HOST, PORT))
 server_socket.listen(1)
 print(f"Listening on {HOST}:{PORT}")
-print("Please send request with raw text: keycode=your_key or mouse=LEFT_CLICK(x,y) or mouse=RIGHT_CLICK(x,y) or mouse=MOVE(x,y)")
+print("Please send request with raw text: typing=your_text_string or keycode=your_key or mouse=LEFT_CLICK(x,y) or mouse=RIGHT_CLICK(x,y) or mouse=MOVE(x,y)")
 
 # Mapping of key names to Keycode values
 keycode_map = {
@@ -206,3 +206,4 @@ while True:
     except Exception as e:
         print(f"An error occurred: {e}")
         
+
