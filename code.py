@@ -124,13 +124,6 @@ keycode_map = {
     "TAB": (Keycode.TAB, False),
     "ENTER": (Keycode.ENTER, False),
     "SPACE": (Keycode.SPACE, False),
-    # Add more key mappings as needed
-}
-
-mouse_map = {
-    "LEFT_CLICK": Mouse.LEFT_BUTTON,
-    "RIGHT_CLICK": Mouse.RIGHT_BUTTON,
-    "MIDDLE_CLICK": Mouse.MIDDLE_BUTTON
 }
 
 def parse_coordinates(action_str):
@@ -153,18 +146,19 @@ while True:
 
         # Check if the request contains "keycode"
         if "keycode" in request_str:
-            key = request_str.split("=")[1].strip()
-            if key in keycode_map:
-                keycode, requires_shift = keycode_map[key]
-                print(f"Triggering keyboard event for key: {key}")
-                if requires_shift:
-                    keyboard.press(Keycode.SHIFT, keycode)
-                    keyboard.release_all()
+            keys = request_str.split("=")[1].strip().split(",")
+            for key in keys:
+                if key in keycode_map:
+                    keycode, requires_shift = keycode_map[key]
+                    print(f"Triggering keyboard event for key: {key}")
+                    if requires_shift:
+                        keyboard.press(Keycode.SHIFT, keycode)
+                        keyboard.release_all()
+                    else:
+                        keyboard.press(keycode)
+                        keyboard.release_all()
                 else:
-                    keyboard.press(keycode)
-                    keyboard.release_all()
-            else:
-                print(f"Invalid key: {key}")
+                    print(f"Invalid key: {key}")
                 
         elif "typing" in request_str:
             text = request_str.split("=")[1].strip()
@@ -175,23 +169,23 @@ while True:
         elif "mouse" in request_str:
             action_str = request_str.split("=")[1].strip()
             action, coords = action_str.split("(")[0].strip(), action_str.split("(")[1].strip()
+            
+            # Parse the coordinates
             x, y = parse_coordinates(f"({coords}")
-
-            if action in mouse_map:
-                button = mouse_map[action]
-                if x is not None and y is not None:
-                    print(f"Triggering mouse event: {action} at x: {x}, y: {y}")
-                    mouse.move(x, y)
-                    mouse.click(button)
-                else:
-                    print(f"Triggering mouse event: {action}")
-                    mouse.click(button)
+            if x is None or y is None:
+                print(f"Invalid mouse coordinates: {coords}")
+            print(f"Triggering mouse event: {action} at x: {x}, y: {y}")
+            
+            if action == "CLICK":
+                mouse.move(x, y)
+                mouse.click(Mouse.LEFT_BUTTON)
+            elif action == "RIGHT_CLICK":
+                mouse.move(x, y)
+                mouse.click(Mouse.RIGHT_BUTTON)
+            elif action == "DOUBLE_CLICK":
+                mouse.click(Mouse.LEFT_BUTTON, count=2)
             elif action == "MOVE":
-                if x is not None and y is not None:
-                    print(f"Moving mouse to x: {x}, y: {y}")
-                    mouse.move(x, y)
-                else:
-                    print(f"Invalid MOVE action coordinates: {coords}")
+                mouse.move(x, y)
             else:
                 print(f"Invalid mouse action: {action}")
 
@@ -200,5 +194,4 @@ while True:
         client_socket.close()
     except Exception as e:
         print(f"An error occurred: {e}")
-        
-
+        response = "HTTP/1.1 500 Internal Server Error\r\nContent-Type: text/plain\r\n\r\nInternal Server Error"

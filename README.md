@@ -44,7 +44,6 @@ Send POST request to the board IP, port 8080.
 
 Send with raw text: `keycode=your_key_code` to trigger key input.  
 Send `typing=your_text_string` to trigger string input.  
-
 Keycode support:  
 1. Alphabet (lower/upper)  
 2. Function keys, `F1` ~ `F12`  
@@ -52,14 +51,17 @@ Keycode support:
    Keycode is `UP`, `DOWN`, `LEFT`, `RIGHT`  
 4. Numbers and Symbols  
 5. Enter, Space, Tab key.  
+   Keycode is `ENTER`, `SPACE`, `TAB`  
+
+Use the `,` to separate keys.  
+For example, `keycode=TAB,ENTER` will trigger Tab key then Enter key.  
 
 * Mouse
 
 Send with raw text: `mouse=mouse_event` to trigger mouse input.  
-
 Mouse event support:  
 1. Click  
-   `LEFT_CLICK(x,y)`, `RIGHT_CLICK(x,y)`, `MIDDLE_CLICK(x,y)`  
+   `CLICK(x,y)`, `RIGHT_CLICK(x,y)`, `DOUBLE_CLICK(x,y)`  
    Click the current position use `LEFT_CLICK(0,0)`
 2. Move  
    `MOVE(x,y)`  
