@@ -1,4 +1,7 @@
 settings.toml
+.env
+go.mod
+go.sum
 
 # for macOS
 .DS_Store
