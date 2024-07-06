@@ -3,7 +3,7 @@ Pico HID Keyboard
 =================
 
 
-A small server running on Raspberry Pi Pico W, receive requests and simulate key input to the machine connected to it.
+A small server running on Raspberry Pi Pico W, receive requests and simulate keyborad/mouse input to the machine connected to it.
 
 
 Dependencies
@@ -37,7 +37,11 @@ How To Use
 ----------
 
 Scan the local network, and find the Pico board IP.  
-Send POST request to the board IP, port 8080, with raw text: `keycode=your_key_code` to trigger key input.  
+Send POST request to the board IP, port 8080.  
+
+* Keyboard  
+
+Send with raw text: `keycode=your_key_code` to trigger key input.  
 
 Keycode support:  
 1. Alphabet (lower/upper)
@@ -45,3 +49,15 @@ Keycode support:
 3. Arrow Keys
    Keycode is `UP`, `DOWN`, `LEFT`, `RIGHT`
 4. Numbers and Symbols
+
+* Mouse
+
+Send with raw text: `mouse=mouse_event` to trigger mouse input.  
+
+Mouse event support:  
+1. Click  
+   `LEFT_CLICK(x,y)`, `RIGHT_CLICK(x,y)`, `MIDDLE_CLICK(x,y)`  
+   Click the current position use `LEFT_CLICK(0,0)`
+2. Move  
+   `MOVE(x,y)`  
+Note: the `x` and `y` is relative coordinate.  
