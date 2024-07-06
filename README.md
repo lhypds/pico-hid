@@ -27,6 +27,7 @@ Setup
    Drag-and-drop the [.uf2 file](https://circuitpython.org/board/raspberry_pi_pico_w/) to the `RPI-RP2` drive.
    It will auto reboot with a CircultPython environment.
 
-2. Copy lib and code.py to the board, re-power it.
+2. Copy `lib`, `code.py`, in `settings.toml` setup WiFi SSID and password, copy them to the board.
+   Re-power it.
 
 Done.  
