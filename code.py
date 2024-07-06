@@ -164,7 +164,7 @@ while True:
             else:
                 print(f"Invalid key: {key}")
                 
-       elif "typing" in request_str:
+        elif "typing" in request_str:
             text = request_str.split("=")[1].strip()
             print(f"Typing text: {text}")
             keyboard_layout = KeyboardLayout.US
