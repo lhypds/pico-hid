@@ -12,9 +12,10 @@ import adafruit_requests
 
 print(sys.version)
 
-# Ensure the keyboard object is initialized properly
-time.sleep(1)
 keyboard = Keyboard(usb_hid.devices)
+
+# Ensure the keyboard object is initialized
+time.sleep(1)
 
 wifi_ssid = os.getenv("WIFI_SSID")
 wifi_password = os.getenv("WIFI_PASSWORD")
