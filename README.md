@@ -43,13 +43,15 @@ Send POST request to the board IP, port 8080.
 * Keyboard  
 
 Send with raw text: `keycode=your_key_code` to trigger key input.  
+Send `typing=your_text_string` to trigger string input.  
 
 Keycode support:  
-1. Alphabet (lower/upper)
-2. Function keys, `F1` ~ `F12`
-3. Arrow Keys
-   Keycode is `UP`, `DOWN`, `LEFT`, `RIGHT`
-4. Numbers and Symbols
+1. Alphabet (lower/upper)  
+2. Function keys, `F1` ~ `F12`  
+3. Arrow Keys  
+   Keycode is `UP`, `DOWN`, `LEFT`, `RIGHT`  
+4. Numbers and Symbols  
+5. Enter, Space, Tab key.  
 
 * Mouse
 
