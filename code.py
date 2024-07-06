@@ -185,6 +185,7 @@ while True:
                 mouse.move(x, y)
                 mouse.click(Mouse.RIGHT_BUTTON)
             elif action == "DOUBLE_CLICK":
+                mouse.move(x, y)
                 mouse.click(Mouse.LEFT_BUTTON)
                 mouse.click(Mouse.LEFT_BUTTON)
             elif action == "MOVE":
