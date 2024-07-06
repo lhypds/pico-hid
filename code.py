@@ -3,18 +3,21 @@ import board
 import usb_hid
 from adafruit_hid.keyboard import Keyboard
 from adafruit_hid.keycode import Keycode
+from adafruit_hid.mouse import Mouse
 import os
 import sys
 import ssl
 import wifi
 import socketpool
 import adafruit_requests
+import re
 
 print(sys.version)
 
 keyboard = Keyboard(usb_hid.devices)
+mouse = Mouse(usb_hid.devices)
 
-# Ensure the keyboard object is initialized
+# Ensure the keyboard and mouse objects are initialized
 time.sleep(1)
 
 wifi_ssid = os.getenv("WIFI_SSID")
@@ -60,7 +63,7 @@ server_socket.setsockopt(pool.SOL_SOCKET, pool.SO_REUSEADDR, 1)
 server_socket.bind((HOST, PORT))
 server_socket.listen(1)
 print(f"Listening on {HOST}:{PORT}")
-print("Please send request with raw text: keycode=your_key")
+print("Please send request with raw text: keycode=your_key or mouse=LEFT_CLICK(x,y) or mouse=RIGHT_CLICK(x,y) or mouse=MOVE(x,y)")
 
 # Mapping of key names to Keycode values
 keycode_map = {
@@ -119,6 +122,20 @@ keycode_map = {
     # Add more key mappings as needed
 }
 
+mouse_map = {
+    "LEFT_CLICK": Mouse.LEFT_BUTTON,
+    "RIGHT_CLICK": Mouse.RIGHT_BUTTON,
+    "MIDDLE_CLICK": Mouse.MIDDLE_BUTTON
+}
+
+def parse_coordinates(action_str):
+    match = re.search(r"\((-?\d+),\s*(-?\d+)\)", action_str)
+    if match:
+        x = int(match.group(1))
+        y = int(match.group(2))
+        return x, y
+    return None, None
+
 while True:
     try:
         client_socket, client_address = server_socket.accept()
@@ -143,6 +160,30 @@ while True:
                     keyboard.release_all()
             else:
                 print(f"Invalid key: {key}")
+
+        # Check if the request contains "mouse"
+        elif "mouse" in request_str:
+            action_str = request_str.split("=")[1].strip()
+            action, coords = action_str.split("(")[0].strip(), action_str.split("(")[1].strip()
+            x, y = parse_coordinates(f"({coords}")
+
+            if action in mouse_map:
+                button = mouse_map[action]
+                if x is not None and y is not None:
+                    print(f"Triggering mouse event: {action} at x: {x}, y: {y}")
+                    mouse.move(x, y)
+                    mouse.click(button)
+                else:
+                    print(f"Triggering mouse event: {action}")
+                    mouse.click(button)
+            elif action == "MOVE":
+                if x is not None and y is not None:
+                    print(f"Moving mouse to x: {x}, y: {y}")
+                    mouse.move(x, y)
+                else:
+                    print(f"Invalid MOVE action coordinates: {coords}")
+            else:
+                print(f"Invalid mouse action: {action}")
 
         response = "HTTP/1.1 200 OK\r\nContent-Type: text/plain\r\n\r\nOK"
         client_socket.send(response.encode('utf8'))
