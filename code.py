@@ -144,7 +144,7 @@ while True:
             else:
                 print(f"Invalid key: {key}")
 
-        response = "HTTP/1.1 200 OK\r\nContent-Type: text/plain\r\n\r\nHello, World!"
+        response = "HTTP/1.1 200 OK\r\nContent-Type: text/plain\r\n\r\nOK"
         client_socket.send(response.encode('utf8'))
         client_socket.close()
     except Exception as e:
