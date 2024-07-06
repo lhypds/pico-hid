@@ -3,6 +3,7 @@ import board
 import usb_hid
 from adafruit_hid.keyboard import Keyboard
 from adafruit_hid.keycode import Keycode
+from adafruit_hid.keyboard_layout_us import KeyboardLayoutUS
 from adafruit_hid.mouse import Mouse
 import os
 import sys
@@ -15,6 +16,7 @@ import re
 print(sys.version)
 
 keyboard = Keyboard(usb_hid.devices)
+keyboard_layout = KeyboardLayoutUS(keyboard)
 mouse = Mouse(usb_hid.devices)
 
 # Ensure the keyboard and mouse objects are initialized
@@ -167,12 +169,11 @@ while True:
         elif "typing" in request_str:
             text = request_str.split("=")[1].strip()
             print(f"Typing text: {text}")
-            keyboard_layout = KeyboardLayout.US
             for char in text:
-                if char in keyboard_layout:
-                    keycode = keyboard_layout[char]
+                if char in keyboard_layout.keycodes:
+                    keycode = keyboard_layout.keycodes[char]
                     keyboard.press(keycode)
-                    keyboard.release_all()
+                    keyboard.release(keycode)
                 else:
                     print(f"Invalid character: {char}")
 
