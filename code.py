@@ -129,7 +129,7 @@ mouse_map = {
 }
 
 def parse_coordinates(action_str):
-    match = re.search(r"\((\d+),(\d+)\)", action_str)
+    match = re.search(r"\((-?\d+),\s*(-?\d+)\)", action_str)
     if match:
         x = int(match.group(1))
         y = int(match.group(2))
