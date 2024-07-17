@@ -21,6 +21,7 @@ mouse = Mouse(usb_hid.devices)
 
 # Ensure the keyboard and mouse objects are initialized
 time.sleep(1)
+wt = 0.2
 
 wifi_ssid = os.getenv("WIFI_SSID")
 wifi_password = os.getenv("WIFI_PASSWORD")
@@ -155,10 +156,14 @@ while True:
                     print(f"Triggering keyboard event for key: {key}")
                     if requires_shift:
                         keyboard.press(Keycode.SHIFT, keycode)
+                        time.sleep(wt)
                         keyboard.release_all()
+                        time.sleep(wt)
                     else:
                         keyboard.press(keycode)
+                        time.sleep(wt)
                         keyboard.release_all()
+                        time.sleep(wt)
                 else:
                     print(f"Invalid key: {key}")
                 
@@ -180,16 +185,23 @@ while True:
             
             if action == "CLICK":
                 mouse.move(x, y)
+                time.sleep(wt)
                 mouse.click(Mouse.LEFT_BUTTON)
+                time.sleep(wt)
             elif action == "RIGHT_CLICK":
                 mouse.move(x, y)
+                time.sleep(wt)
                 mouse.click(Mouse.RIGHT_BUTTON)
+                time.sleep(wt)
             elif action == "DOUBLE_CLICK":
                 mouse.move(x, y)
+                time.sleep(wt)
                 mouse.click(Mouse.LEFT_BUTTON)
                 mouse.click(Mouse.LEFT_BUTTON)
+                time.sleep(wt)
             elif action == "MOVE":
                 mouse.move(x, y)
+                time.sleep(wt)
             else:
                 print(f"Invalid mouse action: {action}")
 
