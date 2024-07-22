@@ -137,7 +137,7 @@ def parse_coordinates(action_str):
     return None, None
 
 # Time interval for periodic mouse movement (in seconds)
-mouse_move_interval = 300  # 5 minutes
+mouse_move_interval = os.getenv("MOUSE_MOVE_INTERVAL")
 last_mouse_move_time = time.monotonic()
 
 while True:
