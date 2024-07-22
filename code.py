@@ -232,4 +232,3 @@ while True:
         time.sleep(wt)
         mouse.move(-3, 0)  # Move mouse left 10 pixels
         last_mouse_move_time = current_time
-
