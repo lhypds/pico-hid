@@ -227,8 +227,9 @@ while True:
 
     # Perform periodic mouse movement if no connections are being handled
     if current_time - last_mouse_move_time >= mouse_move_interval:
-        print("Performing periodic mouse movement")
-        mouse.move(1, 0)  # Move mouse right 10 pixels
+        #print("Performing periodic mouse movement")
+        mouse.move(3, 0)  # Move mouse right 10 pixels
         time.sleep(wt)
-        mouse.move(-1, 0)  # Move mouse left 10 pixels
+        mouse.move(-3, 0)  # Move mouse left 10 pixels
         last_mouse_move_time = current_time
+
