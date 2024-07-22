@@ -65,6 +65,7 @@ server_socket = pool.socket(pool.AF_INET, pool.SOCK_STREAM)
 server_socket.setsockopt(pool.SOL_SOCKET, pool.SO_REUSEADDR, 1)
 server_socket.bind((HOST, PORT))
 server_socket.listen(1)
+server_socket.settimeout(1)  # Set a timeout for accept
 print(f"Listening on {HOST}:{PORT}")
 print("Please send request with raw text: typing=your_text_string or keycode=your_key or mouse=LEFT_CLICK(x,y) or mouse=RIGHT_CLICK(x,y) or mouse=MOVE(x,y)")
 
@@ -135,7 +136,14 @@ def parse_coordinates(action_str):
         return x, y
     return None, None
 
+# Time interval for periodic mouse movement (in seconds)
+mouse_move_interval = 300  # 5 minutes
+last_mouse_move_time = time.monotonic()
+
 while True:
+    current_time = time.monotonic()
+
+    # Check for new connections
     try:
         client_socket, client_address = server_socket.accept()
         print(f"Connection from {client_address}")
@@ -143,7 +151,7 @@ while True:
         buffer = bytearray(1024)
         bytes_received = client_socket.recv_into(buffer)
         request_str = str(buffer[:bytes_received], 'utf8')
-        
+
         # Debug request
         #print(f"Received: {request_str}")
 
@@ -166,7 +174,7 @@ while True:
                         time.sleep(wt)
                 else:
                     print(f"Invalid key: {key}")
-                
+
         elif "typing" in request_str:
             text = request_str.split("=")[1].strip()
             print(f"Typing text: {text}")
@@ -176,13 +184,13 @@ while True:
         elif "mouse" in request_str:
             action_str = request_str.split("=")[1].strip()
             action, coords = action_str.split("(")[0].strip(), action_str.split("(")[1].strip()
-            
+
             # Parse the coordinates
             x, y = parse_coordinates(f"({coords}")
             if x is None or y is None:
                 print(f"Invalid mouse coordinates: {coords}")
             print(f"Triggering mouse event: {action} at x: {x}, y: {y}")
-            
+
             if action == "CLICK":
                 mouse.move(x, y)
                 time.sleep(wt)
@@ -208,6 +216,19 @@ while True:
         response = "HTTP/1.1 200 OK\r\nContent-Type: text/plain\r\n\r\nOK"
         client_socket.send(response.encode('utf8'))
         client_socket.close()
+
     except Exception as e:
-        print(f"An error occurred: {e}")
-        response = "HTTP/1.1 500 Internal Server Error\r\nContent-Type: text/plain\r\n\r\nInternal Server Error"
+        # Check if the error is related to timeout
+        if e.errno == 116:  # ETIMEDOUT error number for timeout
+            pass  # No connection in this iteration, continue to periodic task
+        else:
+            print(f"An unexpected error occurred: {e}")
+            response = "HTTP/1.1 500 Internal Server Error\r\nContent-Type: text/plain\r\n\r\nInternal Server Error"
+
+    # Perform periodic mouse movement if no connections are being handled
+    if current_time - last_mouse_move_time >= mouse_move_interval:
+        print("Performing periodic mouse movement")
+        mouse.move(1, 0)  # Move mouse right 10 pixels
+        time.sleep(wt)
+        mouse.move(-1, 0)  # Move mouse left 10 pixels
+        last_mouse_move_time = current_time
