@@ -1,3 +1,5 @@
+.vscode/
+
 settings.toml
 .env
 go.mod
