@@ -1,3 +1,6 @@
 WIFI_SSID=
 WIFI_PASSWORD=
 MOUSE_MOVE_INTERVAL=60
+# Optional: friendly mDNS name for this board (reachable at <name>.local:8080).
+# Leave unset to auto-generate a unique name like pico-hid-3f9a from the CPU UID.
+MDNS_HOSTNAME=

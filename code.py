@@ -11,6 +11,8 @@ import ssl
 import wifi
 import socketpool
 import adafruit_requests
+import mdns
+import microcontroller
 import re
 
 print(sys.version)
@@ -61,52 +63,119 @@ requests = adafruit_requests.Session(pool, ssl.create_default_context())
 HOST = "0.0.0.0"
 PORT = 8080
 
+# Advertise over mDNS so the board is reachable at a fixed name
+# (http://<hostname>.local:8080) regardless of the DHCP-assigned IP.
+# Each board must have a UNIQUE hostname or multiple devices collide on the
+# network, so default to a suffix derived from the CPU's hardware UID. Set
+# MDNS_HOSTNAME in settings.toml to give a specific board a friendly name.
+mdns_hostname = os.getenv("MDNS_HOSTNAME")
+if not mdns_hostname:
+    uid_suffix = "".join(f"{b:02x}" for b in microcontroller.cpu.uid[-2:])
+    mdns_hostname = f"pico-hid-{uid_suffix}"
+
+# Write the IP and mDNS name to myip.txt on the CIRCUITPY drive so they can be
+# read from the PC without scanning the network. Requires boot.py to remount
+# storage writable; if missing the filesystem is read-only and this is skipped.
+try:
+    with open("/myip.txt", "w") as f:
+        f.write(f"http://{ip_address}:{PORT}\n")
+        f.write(f"http://{mdns_hostname}.local:{PORT}\n")
+    print("Wrote IP to myip.txt")
+except OSError as e:
+    print(f"Could not write myip.txt (is boot.py remounting storage?): {e}")
+
+try:
+    mdns_server = mdns.Server(wifi.radio)
+    mdns_server.hostname = mdns_hostname
+    mdns_server.advertise_service(service_type="_http", protocol="_tcp", port=PORT)
+    print(f"mDNS advertised: http://{mdns_hostname}.local:{PORT}")
+except Exception as e:
+    print(f"Could not start mDNS: {e}")
+
 server_socket = pool.socket(pool.AF_INET, pool.SOCK_STREAM)
 server_socket.setsockopt(pool.SOL_SOCKET, pool.SO_REUSEADDR, 1)
 server_socket.bind((HOST, PORT))
 server_socket.listen(1)
 server_socket.settimeout(1)  # Set a timeout for accept
 print(f"Listening on {HOST}:{PORT}")
-print("Please send request with raw text: typing=your_text_string or keycode=your_key or mouse=LEFT_CLICK(x,y) or mouse=RIGHT_CLICK(x,y) or mouse=MOVE(x,y)")
+print(
+    "Please send request with raw text: typing=your_text_string or keycode=your_key or mouse=LEFT_CLICK(x,y) or mouse=RIGHT_CLICK(x,y) or mouse=MOVE(x,y)"
+)
 
 # Mapping of key names to Keycode values
 keycode_map = {
-    "A": (Keycode.A, True), "a": (Keycode.A, False),
-    "B": (Keycode.B, True), "b": (Keycode.B, False),
-    "C": (Keycode.C, True), "c": (Keycode.C, False),
-    "D": (Keycode.D, True), "d": (Keycode.D, False),
-    "E": (Keycode.E, True), "e": (Keycode.E, False),
-    "F": (Keycode.F, True), "f": (Keycode.F, False),
-    "G": (Keycode.G, True), "g": (Keycode.G, False),
-    "H": (Keycode.H, True), "h": (Keycode.H, False),
-    "I": (Keycode.I, True), "i": (Keycode.I, False),
-    "J": (Keycode.J, True), "j": (Keycode.J, False),
-    "K": (Keycode.K, True), "k": (Keycode.K, False),
-    "L": (Keycode.L, True), "l": (Keycode.L, False),
-    "M": (Keycode.M, True), "m": (Keycode.M, False),
-    "N": (Keycode.N, True), "n": (Keycode.N, False),
-    "O": (Keycode.O, True), "o": (Keycode.O, False),
-    "P": (Keycode.P, True), "p": (Keycode.P, False),
-    "Q": (Keycode.Q, True), "q": (Keycode.Q, False),
-    "R": (Keycode.R, True), "r": (Keycode.R, False),
-    "S": (Keycode.S, True), "s": (Keycode.S, False),
-    "T": (Keycode.T, True), "t": (Keycode.T, False),
-    "U": (Keycode.U, True), "u": (Keycode.U, False),
-    "V": (Keycode.V, True), "v": (Keycode.V, False),
-    "W": (Keycode.W, True), "w": (Keycode.W, False),
-    "X": (Keycode.X, True), "x": (Keycode.X, False),
-    "Y": (Keycode.Y, True), "y": (Keycode.Y, False),
-    "Z": (Keycode.Z, True), "z": (Keycode.Z, False),
-    "1": (Keycode.ONE, False), "!": (Keycode.ONE, True),
-    "2": (Keycode.TWO, False), "@": (Keycode.TWO, True),
-    "3": (Keycode.THREE, False), "#": (Keycode.THREE, True),
-    "4": (Keycode.FOUR, False), "$": (Keycode.FOUR, True),
-    "5": (Keycode.FIVE, False), "%": (Keycode.FIVE, True),
-    "6": (Keycode.SIX, False), "^": (Keycode.SIX, True),
-    "7": (Keycode.SEVEN, False), "&": (Keycode.SEVEN, True),
-    "8": (Keycode.EIGHT, False), "*": (Keycode.EIGHT, True),
-    "9": (Keycode.NINE, False), "(": (Keycode.NINE, True),
-    "0": (Keycode.ZERO, False), ")": (Keycode.ZERO, True),
+    "A": (Keycode.A, True),
+    "a": (Keycode.A, False),
+    "B": (Keycode.B, True),
+    "b": (Keycode.B, False),
+    "C": (Keycode.C, True),
+    "c": (Keycode.C, False),
+    "D": (Keycode.D, True),
+    "d": (Keycode.D, False),
+    "E": (Keycode.E, True),
+    "e": (Keycode.E, False),
+    "F": (Keycode.F, True),
+    "f": (Keycode.F, False),
+    "G": (Keycode.G, True),
+    "g": (Keycode.G, False),
+    "H": (Keycode.H, True),
+    "h": (Keycode.H, False),
+    "I": (Keycode.I, True),
+    "i": (Keycode.I, False),
+    "J": (Keycode.J, True),
+    "j": (Keycode.J, False),
+    "K": (Keycode.K, True),
+    "k": (Keycode.K, False),
+    "L": (Keycode.L, True),
+    "l": (Keycode.L, False),
+    "M": (Keycode.M, True),
+    "m": (Keycode.M, False),
+    "N": (Keycode.N, True),
+    "n": (Keycode.N, False),
+    "O": (Keycode.O, True),
+    "o": (Keycode.O, False),
+    "P": (Keycode.P, True),
+    "p": (Keycode.P, False),
+    "Q": (Keycode.Q, True),
+    "q": (Keycode.Q, False),
+    "R": (Keycode.R, True),
+    "r": (Keycode.R, False),
+    "S": (Keycode.S, True),
+    "s": (Keycode.S, False),
+    "T": (Keycode.T, True),
+    "t": (Keycode.T, False),
+    "U": (Keycode.U, True),
+    "u": (Keycode.U, False),
+    "V": (Keycode.V, True),
+    "v": (Keycode.V, False),
+    "W": (Keycode.W, True),
+    "w": (Keycode.W, False),
+    "X": (Keycode.X, True),
+    "x": (Keycode.X, False),
+    "Y": (Keycode.Y, True),
+    "y": (Keycode.Y, False),
+    "Z": (Keycode.Z, True),
+    "z": (Keycode.Z, False),
+    "1": (Keycode.ONE, False),
+    "!": (Keycode.ONE, True),
+    "2": (Keycode.TWO, False),
+    "@": (Keycode.TWO, True),
+    "3": (Keycode.THREE, False),
+    "#": (Keycode.THREE, True),
+    "4": (Keycode.FOUR, False),
+    "$": (Keycode.FOUR, True),
+    "5": (Keycode.FIVE, False),
+    "%": (Keycode.FIVE, True),
+    "6": (Keycode.SIX, False),
+    "^": (Keycode.SIX, True),
+    "7": (Keycode.SEVEN, False),
+    "&": (Keycode.SEVEN, True),
+    "8": (Keycode.EIGHT, False),
+    "*": (Keycode.EIGHT, True),
+    "9": (Keycode.NINE, False),
+    "(": (Keycode.NINE, True),
+    "0": (Keycode.ZERO, False),
+    ")": (Keycode.ZERO, True),
     "UP": (Keycode.UP_ARROW, False),
     "DOWN": (Keycode.DOWN_ARROW, False),
     "LEFT": (Keycode.LEFT_ARROW, False),
@@ -128,6 +197,7 @@ keycode_map = {
     "SPACE": (Keycode.SPACE, False),
 }
 
+
 def parse_coordinates(action_str):
     match = re.search(r"\((-?\d+),\s*(-?\d+)\)", action_str)
     if match:
@@ -135,6 +205,7 @@ def parse_coordinates(action_str):
         y = int(match.group(2))
         return x, y
     return None, None
+
 
 # Time interval for periodic mouse movement (in seconds)
 mouse_move_interval = os.getenv("MOUSE_MOVE_INTERVAL")
@@ -150,10 +221,10 @@ while True:
 
         buffer = bytearray(1024)
         bytes_received = client_socket.recv_into(buffer)
-        request_str = str(buffer[:bytes_received], 'utf8')
+        request_str = str(buffer[:bytes_received], "utf8")
 
         # Debug request
-        #print(f"Received: {request_str}")
+        # print(f"Received: {request_str}")
 
         # Check if the request contains "keycode"
         if "keycode" in request_str:
@@ -183,7 +254,10 @@ while True:
         # Check if the request contains "mouse"
         elif "mouse" in request_str:
             action_str = request_str.split("=")[1].strip()
-            action, coords = action_str.split("(")[0].strip(), action_str.split("(")[1].strip()
+            action, coords = (
+                action_str.split("(")[0].strip(),
+                action_str.split("(")[1].strip(),
+            )
 
             # Parse the coordinates
             x, y = parse_coordinates(f"({coords}")
@@ -214,7 +288,7 @@ while True:
                 print(f"Invalid mouse action: {action}")
 
         response = "HTTP/1.1 200 OK\r\nContent-Type: text/plain\r\n\r\nOK"
-        client_socket.send(response.encode('utf8'))
+        client_socket.send(response.encode("utf8"))
         client_socket.close()
 
     except Exception as e:
@@ -227,7 +301,7 @@ while True:
 
     # Perform periodic mouse movement if no connections are being handled
     if current_time - last_mouse_move_time >= mouse_move_interval:
-        #print("Performing periodic mouse movement")
+        # print("Performing periodic mouse movement")
         mouse.move(3, 0)  # Move mouse right 10 pixels
         time.sleep(wt)
         mouse.move(-3, 0)  # Move mouse left 10 pixels

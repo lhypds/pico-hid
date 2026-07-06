@@ -27,17 +27,47 @@ Setup
    Drag-and-drop the [.uf2 file](https://circuitpython.org/board/raspberry_pi_pico_w/) to the `RPI-RP2` drive.
    It will auto reboot with a CircultPython environment.
 
-2. Copy `lib`, `code.py`, in `settings.toml` setup WiFi SSID and password, copy them to the board.  
+2. Copy `lib`, `code.py`, and `boot.py` to the board.  
+   Copy `settings.toml.example` to `settings.toml` and set your WiFi SSID and password.  
+   Optionally set `MDNS_HOSTNAME` to give this board a friendly name (see below).  
 
-Re-power it.  
+Re-power it (a full power-cycle, not a soft reload — `boot.py` only runs at hard reset).  
 Done.  
+
+
+Finding the board's address
+---------------------------
+
+You no longer need to scan the local network. Two options are provided:
+
+* **`myip.txt`** — on every boot the board writes its address to `myip.txt` on the
+  `CIRCUITPY` drive. Open the drive on your PC to read it, e.g.:
+
+  ```
+  http://192.168.1.42:8080
+  http://pico-hid-3f9a.local:8080
+  ```
+
+  This requires `boot.py`, which remounts the filesystem so the board can write to it.
+  Side effect: while `boot.py` is present the drive is **read-only from the PC**, so you
+  cannot drag-drop files to update `code.py`. To edit code later, use the serial REPL or
+  temporarily remove `boot.py`.
+
+* **mDNS** — the board advertises itself so you can reach it at a fixed `.local` name
+  regardless of the DHCP-assigned IP, e.g. `http://pico-hid-3f9a.local:8080`.
+
+  Each board must have a unique name or multiple devices collide. By default the name is
+  `pico-hid-XXXX`, where `XXXX` is derived from the board's hardware UID (stable per board).
+  Set `MDNS_HOSTNAME` in `settings.toml` to override it with a friendly name, e.g.
+  `MDNS_HOSTNAME=pico-livingroom` → reachable at `pico-livingroom.local:8080`.
 
 
 API Interface
 -------------
 
-Scan the local network, and find the Pico board IP.  
-Send POST request to the board IP, port 8080.  
+Find the board's address (see "Finding the board's address" above) — either its IP
+from `myip.txt` or its `.local` mDNS name.  
+Send POST request to the board, port 8080.  
 
 * Keyboard  
 
