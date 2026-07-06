@@ -99,7 +99,7 @@ server_socket.listen(1)
 server_socket.settimeout(1)  # Set a timeout for accept
 print(f"Listening on {HOST}:{PORT}")
 print(
-    "Please send request with raw text: typing=your_text_string or keycode=your_key or mouse=LEFT_CLICK(x,y) or mouse=RIGHT_CLICK(x,y) or mouse=MOVE(x,y)"
+    "Please send request with raw text: typing=your_text_string or keycode=your_key or mouse=LEFT_CLICK(x,y) or mouse=RIGHT_CLICK(x,y) or mouse=MOVE(x,y) or automove=START/STOP"
 )
 
 # Mapping of key names to Keycode values
@@ -210,6 +210,8 @@ def parse_coordinates(action_str):
 # Time interval for periodic mouse movement (in seconds)
 mouse_move_interval = os.getenv("MOUSE_MOVE_INTERVAL")
 last_mouse_move_time = time.monotonic()
+# Auto movement runs by default; controlled via automove=START / automove=STOP
+auto_move_enabled = True
 
 while True:
     current_time = time.monotonic()
@@ -250,6 +252,19 @@ while True:
             text = request_str.split("=")[1].strip()
             print(f"Typing text: {text}")
             keyboard_layout.write(text)
+
+        # Check if the request contains "automove"
+        elif "automove" in request_str:
+            command = request_str.split("=")[1].strip()
+            if command == "START":
+                auto_move_enabled = True
+                last_mouse_move_time = current_time
+                print("Auto mouse movement started")
+            elif command == "STOP":
+                auto_move_enabled = False
+                print("Auto mouse movement stopped")
+            else:
+                print(f"Invalid automove command: {command}")
 
         # Check if the request contains "mouse"
         elif "mouse" in request_str:
@@ -300,7 +315,7 @@ while True:
             response = "HTTP/1.1 500 Internal Server Error\r\nContent-Type: text/plain\r\n\r\nInternal Server Error"
 
     # Perform periodic mouse movement if no connections are being handled
-    if current_time - last_mouse_move_time >= mouse_move_interval:
+    if auto_move_enabled and current_time - last_mouse_move_time >= mouse_move_interval:
         # print("Performing periodic mouse movement")
         mouse.move(3, 0)  # Move mouse right 10 pixels
         time.sleep(wt)

@@ -1,0 +1,265 @@
+{
+	"info": {
+		"name": "Pico HID",
+		"description": "Remotely control a machine's keyboard and mouse through a Raspberry Pi Pico W running the Pico HID server.\n\nAll requests are `POST` with a raw `text/plain` body sent to the board on port 8080. The board reads the whole body and dispatches on the first matching prefix: `keycode=`, `typing=`, `automove=`, or `mouse=`. Every request returns `200 OK` with the body `OK`.\n\n## Setup\n\n1. Find the board's address (its IP from `myip.txt` or its `.local` mDNS name — see the project README).\n2. Set the collection variable `baseUrl` to that address, e.g. `http://192.168.1.42:8080` or `http://pico-hid-3f9a.local:8080`.",
+		"schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+	},
+	"variable": [
+		{
+			"key": "baseUrl",
+			"value": "http://pico-hid-3f9a.local:8080",
+			"type": "string"
+		}
+	],
+	"item": [
+		{
+			"name": "Keyboard",
+			"item": [
+				{
+					"name": "Keycode - single key",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "text/plain"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "keycode=ENTER"
+						},
+						"url": {
+							"raw": "{{baseUrl}}/",
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								""
+							]
+						},
+						"description": "Trigger a single key press. Supported keycodes: A-Z / a-z, 0-9 and their shifted symbols (! @ # $ % ^ & * ( )), UP DOWN LEFT RIGHT, F1-F12, TAB, ENTER, SPACE."
+					}
+				},
+				{
+					"name": "Keycode - multiple keys",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "text/plain"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "keycode=TAB,ENTER"
+						},
+						"url": {
+							"raw": "{{baseUrl}}/",
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								""
+							]
+						},
+						"description": "Trigger several keys in sequence, separated by commas. Each key is pressed and released before the next. Example: `keycode=TAB,ENTER` presses Tab then Enter."
+					}
+				},
+				{
+					"name": "Typing - text string",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "text/plain"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "typing=Hello, world!"
+						},
+						"url": {
+							"raw": "{{baseUrl}}/",
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								""
+							]
+						},
+						"description": "Type a full string using the US keyboard layout. Everything after `typing=` is sent verbatim."
+					}
+				}
+			]
+		},
+		{
+			"name": "Mouse",
+			"item": [
+				{
+					"name": "Left click",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "text/plain"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "mouse=CLICK(0,0)"
+						},
+						"url": {
+							"raw": "{{baseUrl}}/",
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								""
+							]
+						},
+						"description": "Move by the given relative offset (x,y) then left-click. Use `CLICK(0,0)` to click at the current position."
+					}
+				},
+				{
+					"name": "Right click",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "text/plain"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "mouse=RIGHT_CLICK(0,0)"
+						},
+						"url": {
+							"raw": "{{baseUrl}}/",
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								""
+							]
+						},
+						"description": "Move by the given relative offset (x,y) then right-click."
+					}
+				},
+				{
+					"name": "Double click",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "text/plain"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "mouse=DOUBLE_CLICK(0,0)"
+						},
+						"url": {
+							"raw": "{{baseUrl}}/",
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								""
+							]
+						},
+						"description": "Move by the given relative offset (x,y) then left double-click."
+					}
+				},
+				{
+					"name": "Move",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "text/plain"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "mouse=MOVE(100,50)"
+						},
+						"url": {
+							"raw": "{{baseUrl}}/",
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								""
+							]
+						},
+						"description": "Move the cursor by the relative offset (x,y). Coordinates are relative to the current position and may be negative."
+					}
+				}
+			]
+		},
+		{
+			"name": "Auto Movement",
+			"item": [
+				{
+					"name": "Start auto move",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "text/plain"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "automove=START"
+						},
+						"url": {
+							"raw": "{{baseUrl}}/",
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								""
+							]
+						},
+						"description": "Start the periodic mouse jiggle (runs every MOUSE_MOVE_INTERVAL seconds). Enabled by default on boot."
+					}
+				},
+				{
+					"name": "Stop auto move",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "text/plain"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "automove=STOP"
+						},
+						"url": {
+							"raw": "{{baseUrl}}/",
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								""
+							]
+						},
+						"description": "Stop the periodic mouse jiggle."
+					}
+				}
+			]
+		}
+	]
+}

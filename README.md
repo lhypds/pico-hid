@@ -96,6 +96,13 @@ Mouse event support:
    `MOVE(x,y)`  
 Note: the `x` and `y` is relative coordinate.  
 
+* Auto Movement
+
+The board periodically jiggles the mouse every `MOUSE_MOVE_INTERVAL` seconds
+(set in `settings.toml`). It is enabled by default and can be controlled remotely:  
+Send `automove=START` to start the auto mouse movement.  
+Send `automove=STOP` to stop it.  
+
 
 Client Code
 -----------

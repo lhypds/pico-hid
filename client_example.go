@@ -65,6 +65,14 @@ func typing(text string) {
 	sendRequest("typing=" + text)
 }
 
+func startAutoMove() {
+	sendRequest("automove=START")
+}
+
+func stopAutoMove() {
+	sendRequest("automove=STOP")
+}
+
 func main() {
 	loadEnv()
 	fmt.Println("Server URL: " + os.Getenv("PICO_HID_SERVER_URL"))
