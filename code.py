@@ -207,11 +207,21 @@ def parse_coordinates(action_str):
     return None, None
 
 
-# Time interval for periodic mouse movement (in seconds)
-mouse_move_interval = os.getenv("MOUSE_MOVE_INTERVAL")
+# Time interval for periodic mouse movement (in seconds).
+# Defaults to 30s so automove works even when MOUSE_MOVE_INTERVAL is unset.
+mouse_move_interval = int(os.getenv("MOUSE_MOVE_INTERVAL") or 30)
 last_mouse_move_time = time.monotonic()
-# Auto movement runs by default; controlled via automove=START / automove=STOP
-auto_move_enabled = True
+# Whether auto movement runs on boot; set AUTOMOVE_AUTOSTART=0 in settings.toml
+# to boot with it off. Either way it stays controllable at runtime via
+# automove=START / automove=STOP.
+_autostart = os.getenv("AUTOMOVE_AUTOSTART")
+auto_move_enabled = _autostart is None or str(_autostart).strip().lower() not in (
+    "0",
+    "false",
+    "no",
+    "off",
+)
+print(f"Auto mouse movement on boot: {'enabled' if auto_move_enabled else 'disabled'}")
 
 while True:
     current_time = time.monotonic()

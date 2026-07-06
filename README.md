@@ -99,7 +99,9 @@ Note: the `x` and `y` is relative coordinate.
 * Auto Movement
 
 The board periodically jiggles the mouse every `MOUSE_MOVE_INTERVAL` seconds
-(set in `settings.toml`). It is enabled by default and can be controlled remotely:  
+(set in `settings.toml`, defaults to 30 if unset). Whether it starts on boot is
+controlled by `AUTOMOVE_AUTOSTART` in `settings.toml`: `1` (or unset) starts it
+automatically, `0` boots with it off. Either way it can be toggled remotely:  
 Send `automove=START` to start the auto mouse movement.  
 Send `automove=STOP` to stop it.  
 

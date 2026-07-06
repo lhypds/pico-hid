@@ -1,6 +1,11 @@
 WIFI_SSID=
 WIFI_PASSWORD=
+
+# Start auto mouse movement on boot. 1 = on (default if unset), 0 = off.
+# Runtime commands automove=START / automove=STOP work regardless.
+AUTOMOVE_AUTOSTART=1
 MOUSE_MOVE_INTERVAL=60
+
 # Optional: friendly mDNS name for this board (reachable at <name>.local:8080).
 # Leave unset to auto-generate a unique name like pico-hid-3f9a from the CPU UID.
 MDNS_HOSTNAME=
