@@ -50,12 +50,12 @@ if not wifi_ssid or not wifi_password:
     write_error_file(message)
     sys.exit(1)
 
-# Board identity: pico-hid-<uid>, derived from the CPU's hardware UID —
+# Board identity: ph-<uid>, derived from the CPU's hardware UID —
 # unique per board and stable across reboots, so no persistence needed.
 # It becomes the board's network name for both DHCP and mDNS, and is
 # written to hostname.txt after WiFi connects.
 uid_suffix = "".join(f"{b:02x}" for b in microcontroller.cpu.uid[-2:])
-board_id = f"pico-hid-{uid_suffix}"
+board_id = f"ph-{uid_suffix}"
 print(f"Board id: {board_id}")
 
 # Present the id as hostname to the router's DHCP. Must be set before
