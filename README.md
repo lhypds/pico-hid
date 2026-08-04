@@ -171,18 +171,98 @@ your tab as well. Two ways around it:
   isn't a keystroke, so nothing intercepts it.
 
 
+Desktop App
+-----------
+
+`client/keyboard.go` is a desktop window holding a full-size keyboard with a
+square trackpad beside it, for driving the board from a computer instead of a
+browser. The window is only those two things; everything else is behind
+`Settings…` in the menu bar.
+
+Run `./keyboard.sh`. It sets the Go module up the first time, builds the app and
+starts it, and passes any arguments through — so `./keyboard.sh -url
+http://ph-1234.local` works.  
+
+To set the directory up by hand instead, `cd client` and:
+
+`go mod init pico-hid`  
+`go get fyne.io/fyne/v2 github.com/joho/godotenv`  
+`go mod tidy`  
+
+then `go run keyboard.go`.  
+The GUI is drawn through OpenGL, so building it needs a C compiler — on macOS
+that means the Xcode command line tools.  
+
+`Settings…` holds the board, the target and the pointer speed, all remembered
+between runs. The board is asked for as `http://ph-` **id** `.local`, because
+only the id varies: it is four hex digits of the board's CPU id, which it prints
+on boot and writes to `hostname.txt` on the CIRCUITPY drive. A whole address
+pasted into the field is reduced to the id, so that works too. `-url` or
+`PICO_HID_SERVER_URL` in `client/.env` — the same file the macro client reads —
+can name any host instead, an IP included. With nothing set yet the window opens
+the settings straight away.  
+
+Nothing else is on screen, and there is no status display at all: a command that
+fails is retried and then let go, since a keystroke that didn't land is something
+you see on the target machine anyway.  
+
+Resolving a `.local` name takes a few seconds on some networks — five, where the
+router answers such queries slowly — and the board closes every connection, so
+that cost would otherwise land on every keystroke. The address is looked up once
+at startup, and again whenever the setting changes, then reused; only that first
+lookup waits. To skip it altogether, give the board's IP instead:
+`./keyboard.sh -url http://192.168.0.41`.  
+
+* Keyboard
+
+A full-size 104-key ANSI layout: function row, main block, navigation cluster
+and numeric keypad. Keys send the *physical* key rather than the character it
+would produce, so the target machine applies its own layout.  
+
+Clicking a modifier latches it for the next key; clicking again locks it down
+until clicked off, for typing a run of keys with it held.  
+
+Keys pressed on the real keyboard are forwarded as well while the window has
+focus, and the keycap they belong to is drawn held so you can see what went.
+Modifiers combine as you would expect, so `Ctrl`+`c` typed for real arrives as
+one chord. Key repeat is dropped rather than flooding the board, and
+combinations the window manager claims first (`Cmd+Tab`, `Alt+Tab`) can't be
+forwarded — click those on screen instead. Typing pauses while the settings
+dialog has focus, so its own field behaves normally.  
+
+* Target
+
+The `Target` setting says which machine the board is plugged into. It changes no
+key that gets sent — the board always sends physical keys — only how the two
+caps either side of the space bar are labelled and which order they are in:
+`ctrl win alt` on Windows, `ctrl ⌥ ⌘` on macOS, each as that keyboard really has
+them. It starts on whichever the machine running the window is.  
+
+* Num
+
+`Num` acts only on the window. The API has no keypad key names, so it picks
+whether the keypad sends digits or the navigation keys printed on its faces,
+which is what Num Lock chooses between on a real board.  
+
+* Trackpad
+
+The gestures are the web UI's: dragging moves the pointer, click, right-click
+and double-click do the obvious thing, and the wheel scrolls the target machine.
+Holding shift while dragging keeps the left button down for the whole drag,
+which is how you drag something *on* the target rather than just moving the
+pointer over it.  
+
+
 Macro
 -----
 
 There is a client example code (`client/client_example.go`) written in Go language.  
 You can add your own code in `main()`.  
 
-To use it, `cd client` first, then set it up with:
-
-`go mod init pico-hid`  
-`go get github.com/joho/godotenv`  
+It shares the `client` directory with the desktop app, so it sits behind a build
+tag to keep the two commands apart. Set the directory up as described above.  
 
 Copy `.env.example` to `.env` and add the server URL as,  
 `PICO_HID_SERVER_URL=your_server_url`  
 
-Run it with `go run client_example.go`.  
+Run it with `go run -tags example client_example.go`.  
