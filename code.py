@@ -50,6 +50,21 @@ if not wifi_ssid or not wifi_password:
     write_error_file(message)
     sys.exit(1)
 
+# Board identity: pico-hid-<uid>, derived from the CPU's hardware UID —
+# unique per board and stable across reboots, so no persistence needed.
+# It becomes the board's network name for both DHCP and mDNS, and is
+# written to hostname.txt after WiFi connects.
+uid_suffix = "".join(f"{b:02x}" for b in microcontroller.cpu.uid[-2:])
+board_id = f"pico-hid-{uid_suffix}"
+print(f"Board id: {board_id}")
+
+# Present the id as hostname to the router's DHCP. Must be set before
+# wifi.radio.connect().
+try:
+    wifi.radio.hostname = board_id
+except Exception as e:
+    print(f"Could not set WiFi hostname: {e}")
+
 print("Connecting to WiFi: " + wifi_ssid + "...")
 
 max_retries = 5
@@ -85,13 +100,9 @@ PORT = 80
 
 # Advertise over mDNS so the board is reachable at a fixed name
 # (http://<hostname>.local) regardless of the DHCP-assigned IP.
-# Each board must have a UNIQUE hostname or multiple devices collide on the
-# network, so default to a suffix derived from the CPU's hardware UID. Set
-# MDNS_HOSTNAME in settings.toml to give a specific board a friendly name.
-mdns_hostname = os.getenv("MDNS_HOSTNAME")
-if not mdns_hostname:
-    uid_suffix = "".join(f"{b:02x}" for b in microcontroller.cpu.uid[-2:])
-    mdns_hostname = f"pico-hid-{uid_suffix}"
+# board_id is unique per board, so multiple boards on the same network
+# never collide.
+mdns_hostname = board_id
 
 # Write the IP and mDNS name to ip.txt / hostname.txt on the CIRCUITPY
 # drive so they can be read from the PC without scanning the network.
