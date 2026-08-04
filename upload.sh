@@ -44,7 +44,7 @@ case "$reply" in
         ;;
 esac
 
-if cp -r "$DEST"/. "$BOARD"/; then
+if cp -rv "$DEST"/. "$BOARD"/; then
     echo "Uploaded to $BOARD."
 else
     echo "Failed to copy files to $BOARD." >&2
