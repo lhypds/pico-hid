@@ -35,6 +35,7 @@ import (
 	"fyne.io/fyne/v2/container"
 	"fyne.io/fyne/v2/dialog"
 	"fyne.io/fyne/v2/driver/desktop"
+	"fyne.io/fyne/v2/layout"
 	"fyne.io/fyne/v2/theme"
 	"fyne.io/fyne/v2/widget"
 	"github.com/joho/godotenv"
@@ -597,6 +598,11 @@ const rowGapUnits = 0.4
 // minKeyUnit keeps the smallest the board can shrink to still legible.
 const minKeyUnit = 27
 
+// capInset is how far a keycap is drawn inside its cell, which is what makes the
+// gap between neighbouring keys. The trackpad uses it too, so the board and the
+// pad sit the same distance inside the window.
+const capInset = 1.5
+
 // ---------------------------------------------------------------------------
 // Keyboard state
 // ---------------------------------------------------------------------------
@@ -892,16 +898,15 @@ type keyCapRenderer struct {
 }
 
 func (r *keyCapRenderer) Layout(size fyne.Size) {
-	const inset = 1.5 // the visible gap between neighbouring keycaps
-	r.bg.Move(fyne.NewPos(inset, inset))
-	r.bg.Resize(fyne.NewSize(size.Width-2*inset, size.Height-2*inset))
+	r.bg.Move(fyne.NewPos(capInset, capInset))
+	r.bg.Resize(fyne.NewSize(size.Width-2*capInset, size.Height-2*capInset))
 
 	// Scale the legend with the key so the board stays readable at any window
 	// size, but keep it inside the range the font actually looks right at.
 	textSize := clampF(size.Height*0.3, 8, 13)
 	// Then shrink it if the word would overrun a narrow key — the keypad's
 	// "enter" is a whole word on a one-unit cap.
-	avail := size.Width - 2*inset - 2
+	avail := size.Width - 2*capInset - 2
 	for textSize > 5 && fyne.MeasureText(r.label.Text, textSize, r.label.TextStyle).Width > avail {
 		textSize -= 0.5
 	}
@@ -1091,6 +1096,9 @@ const (
 	maxSpeed = 4
 	// Just the four hex digits an id is, and no room for more.
 	boardIDWidth = 46
+	// Wide enough for a full-size board at a comfortable key size; the height
+	// that goes with it is worked out from the layout.
+	windowWidth = 1240
 	// How long a click waits to see whether a second one follows, and how far a
 	// gesture may wander and still count as being in one place. Both match the
 	// web UI, so the two clients feel the same.
@@ -1243,8 +1251,8 @@ type trackpadRenderer struct {
 }
 
 func (r *trackpadRenderer) Layout(size fyne.Size) {
-	r.bg.Move(fyne.NewPos(0, 0))
-	r.bg.Resize(size)
+	r.bg.Move(fyne.NewPos(capInset, capInset))
+	r.bg.Resize(fyne.NewSize(size.Width-2*capInset, size.Height-2*capInset))
 }
 
 func (r *trackpadRenderer) MinSize() fyne.Size { return fyne.NewSize(200, 160) }
@@ -1503,10 +1511,20 @@ func main() {
 		pad.releaseHeld()
 	})
 
-	w.SetContent(container.NewPadded(keyboard))
-	// The board and the pad keep their proportions, so any spare height is only
-	// dead space: size the window to what they actually need.
-	w.Resize(fyne.NewSize(1240, 300))
+	// The margin is set here rather than left to the window's own padding: it is
+	// wider than the theme default, and it has to be a single known number for
+	// the height below to match it. Two layers of padding is what made the
+	// margins uneven before.
+	margin := 2 * theme.Size(theme.SizeNamePadding)
+	w.SetPadded(false)
+	w.SetContent(container.New(
+		layout.NewCustomPaddedLayout(margin, margin, margin, margin), keyboard))
+	// The board keeps its proportions, so its height follows from its width, and
+	// the window has to be exactly that tall. Any spare height would otherwise
+	// go to fitting the board by height instead, which shrinks it and leaves the
+	// slack at the sides.
+	unit := (windowWidth - 2*margin) / keyboard.cols
+	w.Resize(fyne.NewSize(windowWidth, 2*margin+keyboard.rows*unit))
 	w.CenterOnScreen()
 
 	go snd.run()
