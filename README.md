@@ -43,12 +43,12 @@ Finding the board's address
 
 You no longer need to scan the local network. Two options are provided:
 
-* **`myip.txt` / `myhostname.txt`** — on every boot the board writes its address to
+* **`ip.txt` / `hostname.txt`** — on every boot the board writes its address to
   these files on the `CIRCUITPY` drive. Open the drive on your PC to read them, e.g.:
 
   ```
-  myip.txt:       192.168.1.42
-  myhostname.txt: pico-hid-3f9a.local
+  ip.txt:       192.168.1.42
+  hostname.txt: pico-hid-3f9a.local
   ```
 
   This requires `boot.py`, which remounts the filesystem so the board can write to it,

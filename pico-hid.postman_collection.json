@@ -1,7 +1,7 @@
 {
 	"info": {
 		"name": "Pico HID",
-		"description": "Remotely control a machine's keyboard and mouse through a Raspberry Pi Pico W running the Pico HID server.\n\nAll requests are `POST` with a raw `text/plain` body sent to the board on port 80. The board reads the whole body and dispatches on the first matching prefix: `keycode=`, `typing=`, `automove=`, or `mouse=`. Every request returns `200 OK` with the body `OK`.\n\n## Setup\n\n1. Find the board's address (its IP from `myip.txt` or its `.local` mDNS name — see the project README).\n2. Set the collection variable `baseUrl` to that address, e.g. `http://192.168.1.42` or `http://pico-hid-3f9a.local`.",
+		"description": "Remotely control a machine's keyboard and mouse through a Raspberry Pi Pico W running the Pico HID server.\n\nAll requests are `POST` with a raw `text/plain` body sent to the board on port 80. The board reads the whole body and dispatches on the first matching prefix: `keycode=`, `typing=`, `automove=`, or `mouse=`. Every request returns `200 OK` with the body `OK`.\n\n## Setup\n\n1. Find the board's address (its IP from `ip.txt` or its `.local` mDNS name — see the project README).\n2. Set the collection variable `baseUrl` to that address, e.g. `http://192.168.1.42` or `http://pico-hid-3f9a.local`.",
 		"schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
 	},
 	"variable": [

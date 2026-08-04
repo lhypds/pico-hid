@@ -93,18 +93,18 @@ if not mdns_hostname:
     uid_suffix = "".join(f"{b:02x}" for b in microcontroller.cpu.uid[-2:])
     mdns_hostname = f"pico-hid-{uid_suffix}"
 
-# Write the IP and mDNS name to myip.txt / myhostname.txt on the CIRCUITPY
+# Write the IP and mDNS name to ip.txt / hostname.txt on the CIRCUITPY
 # drive so they can be read from the PC without scanning the network.
 # Requires boot.py to remount storage writable; if missing the filesystem is
 # read-only and this is skipped.
 try:
-    with open("/myip.txt", "w") as f:
+    with open("/ip.txt", "w") as f:
         f.write(f"{ip_address}\n")
-    with open("/myhostname.txt", "w") as f:
+    with open("/hostname.txt", "w") as f:
         f.write(f"{mdns_hostname}.local\n")
-    print("Wrote IP to myip.txt and hostname to myhostname.txt")
+    print("Wrote IP to ip.txt and hostname to hostname.txt")
 except OSError as e:
-    print(f"Could not write myip.txt/myhostname.txt (is boot.py remounting storage?): {e}")
+    print(f"Could not write ip.txt/hostname.txt (is boot.py remounting storage?): {e}")
 
 try:
     mdns_server = mdns.Server(wifi.radio)
