@@ -75,6 +75,9 @@
         cursor: pointer;
         touch-action: manipulation; /* no double-tap zoom on repeated taps */
         -webkit-tap-highlight-color: transparent;
+        user-select: none;
+        -webkit-user-select: none;
+        -webkit-touch-callout: none; /* no long-press callout on iOS */
       }
 
       /* Marks which button is the live one; the two swap on mode change. */
