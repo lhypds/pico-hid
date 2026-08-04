@@ -6,6 +6,8 @@ from adafruit_hid.keyboard import Keyboard
 from adafruit_hid.keycode import Keycode
 from adafruit_hid.keyboard_layout_us import KeyboardLayoutUS
 from adafruit_hid.mouse import Mouse
+from adafruit_hid.consumer_control import ConsumerControl
+from adafruit_hid.consumer_control_code import ConsumerControlCode
 import os
 import sys
 import wifi
@@ -34,6 +36,7 @@ except OSError:
 keyboard = Keyboard(usb_hid.devices)
 keyboard_layout = KeyboardLayoutUS(keyboard)
 mouse = Mouse(usb_hid.devices)
+consumer_control = ConsumerControl(usb_hid.devices)
 
 # Onboard LED as an activity light. On the Pico W it hangs off the WiFi chip
 # rather than a GPIO, so guard the setup — a board without board.LED should
@@ -228,6 +231,26 @@ for _alias, _name in (
     ("META", "GUI"),
 ):
     keycode_map[_alias] = (getattr(Keycode, _name), False)
+
+
+# Names accepted in consumer= commands: HID Consumer Control usages, which is
+# the channel a keyboard's media keys use — brightness, volume and playback
+# land on any target. The last four are usages a Mac reads as its own
+# function-row features; other machines mostly ignore them.
+consumer_map = {
+    "BRIGHTNESS_UP": ConsumerControlCode.BRIGHTNESS_INCREMENT,
+    "BRIGHTNESS_DOWN": ConsumerControlCode.BRIGHTNESS_DECREMENT,
+    "PREV_TRACK": ConsumerControlCode.SCAN_PREVIOUS_TRACK,
+    "PLAY_PAUSE": ConsumerControlCode.PLAY_PAUSE,
+    "NEXT_TRACK": ConsumerControlCode.SCAN_NEXT_TRACK,
+    "MUTE": ConsumerControlCode.MUTE,
+    "VOLUME_UP": ConsumerControlCode.VOLUME_INCREMENT,
+    "VOLUME_DOWN": ConsumerControlCode.VOLUME_DECREMENT,
+    "MISSION_CONTROL": 0x29F,  # AC Desktop Show All Windows
+    "LAUNCHPAD": 0x2A0,  # AC Soft Key Left
+    "SPOTLIGHT": 0x221,  # AC Search
+    "DICTATION": 0xCF,  # Voice Command
+}
 
 
 def press_chord(chord):
@@ -428,6 +451,19 @@ while True:
             elif body.startswith("keycode="):
                 for chord in body.split("=", 1)[1].strip().split(","):
                     press_chord(chord)
+
+            # "," separates consumer-control taps sent one after another.
+            # These don't chord — the HID consumer report carries one usage
+            # at a time, and none of them mean anything held together.
+            elif body.startswith("consumer="):
+                for name in body.split("=", 1)[1].strip().split(","):
+                    name = name.strip()
+                    code = consumer_map.get(name)
+                    if code is None:
+                        print(f"Invalid consumer control: {name}")
+                        continue
+                    consumer_control.send(code)
+                    time.sleep(key_wt)
 
             elif body.startswith("typing="):
                 # No strip() here: fetch bodies arrive exact, and a lone or

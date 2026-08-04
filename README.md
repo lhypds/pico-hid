@@ -78,6 +78,18 @@ holds both at once so the target machine sees a copy shortcut. They combine:
 An unrecognised key name cancels its whole chord rather than sending part of it,
 so a typo can't leave a modifier stuck down on the target machine.  
 
+* Media and system keys
+
+Send `consumer=name` to tap a media key — these go out as HID Consumer
+Control usages, the channel a real keyboard's media keys use, so brightness
+and volume work where a plain `F1` keycode wouldn't.  
+Supported names:  
+`BRIGHTNESS_UP`, `BRIGHTNESS_DOWN`, `PREV_TRACK`, `PLAY_PAUSE`, `NEXT_TRACK`,
+`MUTE`, `VOLUME_UP`, `VOLUME_DOWN`, and four a Mac reads as its function-row
+features: `MISSION_CONTROL`, `LAUNCHPAD`, `SPOTLIGHT`, `DICTATION`.  
+Use `,` for a sequence, e.g. `consumer=VOLUME_UP,VOLUME_UP`. These don't chord
+with `keycode=` modifiers — the consumer report has no room for them.  
+
 * Mouse
 
 Send with raw text: `mouse=mouse_event` to trigger mouse input.  
@@ -232,11 +244,27 @@ dialog has focus, so its own field behaves normally.
 
 * Target
 
-The `Target` setting says which machine the board is plugged into. It changes no
-key that gets sent — the board always sends physical keys — only how the two
-caps either side of the space bar are labelled and which order they are in:
-`ctrl win alt` on Windows, `ctrl ⌥ ⌘` on macOS, each as that keyboard really has
-them. It starts on whichever the machine running the window is.  
+The `Target` setting says which machine the board is plugged into, and reshapes
+the board into the one that machine expects. It starts on whichever the machine
+running the window is.  
+
+On Windows it is a plain 104-key PC layout. On macOS:
+
+- The two caps either side of the space bar become `⌥` and `⌘`, in the order a
+  Mac really has them.
+- The `menu` key becomes `fn`, as on Apple's full-size keyboard.
+- `prtsc` / `scrlk` / `pause` become `F13`-`F15`, and `F16`-`F19` appear above
+  the keypad — the keys Apple puts in those positions.
+
+* fn (macOS target only)
+
+`fn` latches like a modifier — once for the next key, twice to lock — but acts
+only on the window: nothing is sent for fn itself, since Apple's fn never
+leaves the keyboard as a normal HID key. While it is latched the function row
+takes on Apple's printed features and sends them as `consumer=` media codes:
+brightness on `F1`/`F2`, Mission Control on `F3`, Spotlight on `F4`, Dictation
+on `F5`, media and volume on `F7`-`F12`. `F6` stays `F6`: its Focus feature has
+no code a third-party keyboard can send.  
 
 * Num
 

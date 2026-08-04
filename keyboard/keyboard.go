@@ -465,6 +465,7 @@ const (
 	kindNormal  keyKind = iota
 	kindMod             // latches a modifier instead of sending on its own
 	kindNumLock         // toggles what the keypad sends, locally
+	kindFn              // latches fn on a Mac target; a plain key elsewhere
 	kindGap             // blank filler, not a key at all
 )
 
@@ -479,6 +480,10 @@ type keyDef struct {
 	numSend   string // API key name with Num Lock off
 	macFace   string // label when the target is a Mac
 	macMod    string // the modifier a kindMod key latches on a Mac target
+	macSend   string // API key name when the target is a Mac; empty means unchanged
+	macOnly   bool   // a key only a Mac board has; drawn as empty space otherwise
+	fnFace    string // label while fn is latched on a Mac target
+	fnSend    string // consumer-control name sent while fn is latched
 }
 
 func gp(w float32) keyDef         { return keyDef{w: w, h: 1, kind: kindGap} }
@@ -510,6 +515,28 @@ func pad(w float32, face, send, numFace, numSend string) keyDef {
 
 func tall(d keyDef) keyDef { d.h = 2; return d }
 
+// fk builds a function-row key. On a Mac target with fn latched it takes on
+// the feature Apple prints on that keycap, sent as a consumer-control code —
+// a Mac ignores a plain F1 keycode's brightness ambitions, but honours the
+// media usage a real keyboard's brightness key sends.
+func fk(n, fnFace, fnSend string) keyDef {
+	return keyDef{w: 1, h: 1, face: n, send: n, fnFace: fnFace, fnSend: fnSend}
+}
+
+// mk builds a key a Mac both labels and sends differently: the three keys
+// right of the function row are prtsc/scrlk/pause on a PC, but a Mac has no
+// such keys — Apple puts F13-F15 there instead.
+func mk(face, send, macName string) keyDef {
+	return keyDef{w: 1, h: 1, face: face, send: send, macFace: macName, macSend: macName}
+}
+
+// macF builds one of the F16-F19 keys an Apple full-size board carries above
+// the keypad. A PC board has nothing there, so on other targets the key
+// disappears into the gap it fills.
+func macF(n string) keyDef {
+	return keyDef{w: 1, h: 1, face: n, send: n, macOnly: true}
+}
+
 // mdSwap builds one of the modifier keys flanking the space bar. A PC and a Mac
 // label these differently and — more to the point — put them in a different
 // order, so the same keycap takes on a different identity per target: reading
@@ -520,11 +547,19 @@ func mdSwap(w float32, face, mod, macFace, macMod string) keyDef {
 
 var keyRows = [][]keyDef{
 	{
+		// The fn faces follow Apple's current function row. F6 stays F6: its
+		// Focus feature has no consumer-control usage a third-party keyboard
+		// can send (Apple puts it on the Generic Desktop page).
 		k1("esc", "ESCAPE"), gp(1),
-		k1("F1", "F1"), k1("F2", "F2"), k1("F3", "F3"), k1("F4", "F4"), gp(0.5),
-		k1("F5", "F5"), k1("F6", "F6"), k1("F7", "F7"), k1("F8", "F8"), gp(0.5),
-		k1("F9", "F9"), k1("F10", "F10"), k1("F11", "F11"), k1("F12", "F12"), gp(0.5),
-		k1("prtsc", "PRINT_SCREEN"), k1("scrlk", "SCROLL_LOCK"), k1("pause", "PAUSE"),
+		fk("F1", "bri-", "BRIGHTNESS_DOWN"), fk("F2", "bri+", "BRIGHTNESS_UP"),
+		fk("F3", "mctl", "MISSION_CONTROL"), fk("F4", "spot", "SPOTLIGHT"), gp(0.5),
+		fk("F5", "dict", "DICTATION"), k1("F6", "F6"),
+		fk("F7", "prev", "PREV_TRACK"), fk("F8", "play", "PLAY_PAUSE"), gp(0.5),
+		fk("F9", "next", "NEXT_TRACK"), fk("F10", "mute", "MUTE"),
+		fk("F11", "vol-", "VOLUME_DOWN"), fk("F12", "vol+", "VOLUME_UP"), gp(0.5),
+		mk("prtsc", "PRINT_SCREEN", "F13"), mk("scrlk", "SCROLL_LOCK", "F14"), mk("pause", "PAUSE", "F15"),
+		gp(0.5),
+		macF("F16"), macF("F17"), macF("F18"), macF("F19"),
 	},
 	{}, // an empty row is vertical breathing room
 	{
@@ -578,9 +613,11 @@ var keyRows = [][]keyDef{
 		mdSwap(1.25, "win", "GUI", "⌥", "ALT"), mdSwap(1.25, "alt", "ALT", "⌘", "GUI"),
 		kw(6.25, "space", "SPACE"),
 		mdSwap(1.25, "alt", "ALT", "⌘", "GUI"), mdSwap(1.25, "win", "GUI", "⌥", "ALT"),
-		// The context-menu key. Spelled out rather than drawn as ▤, which most
-		// fonts don't carry and renders as a blank box.
-		kw(1.25, "menu", "APPLICATION"), md(1.25, "ctrl", "CTRL"),
+		// The context-menu key, spelled out rather than drawn as ▤, which most
+		// fonts don't carry and renders as a blank box. A Mac has fn in this
+		// spot instead, which latches locally rather than sending anything.
+		{w: 1.25, h: 1, kind: kindFn, face: "menu", send: "APPLICATION", macFace: "fn"},
+		md(1.25, "ctrl", "CTRL"),
 		gp(0.5),
 		k1("←", "LEFT"), k1("↓", "DOWN"), k1("→", "RIGHT"),
 		gp(0.5),
@@ -627,6 +664,7 @@ type keyboardUI struct {
 	mods    map[string]int  // API modifier name -> latch level
 	held    map[string]bool // API key names held down on the real keyboard
 	numLock bool
+	fn      int  // fn latch level; only a Mac target has an fn key to latch
 	mac     bool // the target machine is a Mac, which relabels the modifiers
 	// settingsOpen holds the real keyboard back while the settings dialog is up,
 	// so what gets typed there fills the board field instead of being forwarded.
@@ -651,6 +689,18 @@ func (ui *keyboardUI) modOf(d keyDef) string {
 	return d.mod
 }
 
+// fnActive reports whether the fn latch is on. It can only be on a Mac
+// target: switching targets clears it along with the key itself.
+func (ui *keyboardUI) fnActive() bool {
+	return ui.mac && ui.fn != latchOff
+}
+
+// hides reports whether this key isn't on the target's board at all —
+// F16-F19 fill what is empty space on a PC layout.
+func (ui *keyboardUI) hides(d keyDef) bool {
+	return d.macOnly && !ui.mac
+}
+
 func (ui *keyboardUI) refreshKeys() {
 	for _, k := range ui.keys {
 		k.Refresh()
@@ -658,6 +708,9 @@ func (ui *keyboardUI) refreshKeys() {
 }
 
 func (ui *keyboardUI) press(d keyDef) {
+	if ui.hides(d) {
+		return
+	}
 	switch d.kind {
 	case kindMod:
 		// Off -> sticky (clears after the next key) -> locked -> off.
@@ -669,9 +722,32 @@ func (ui *keyboardUI) press(d keyDef) {
 		ui.numLock = !ui.numLock
 		ui.refreshKeys()
 		return
+	case kindFn:
+		if !ui.mac {
+			ui.sendChord(d.send) // the menu key it is on a PC
+			return
+		}
+		// The same off -> sticky -> locked round the modifiers make, though
+		// fn never goes out on the wire: it only picks what the F row sends.
+		ui.fn = (ui.fn + 1) % 3
+		ui.refreshKeys()
+		return
+	}
+
+	// An fn-latched function key sends its consumer-control feature instead
+	// of a keycode. Modifiers don't apply — the consumer report has no room
+	// for them, and shift-volume means nothing to the target — but a sticky
+	// one is still spent, this being the key it was waiting for.
+	if ui.fnActive() && d.fnSend != "" {
+		ui.snd.enqueue("consumer=" + d.fnSend)
+		ui.clearSticky()
+		return
 	}
 
 	send := d.send
+	if ui.mac && d.macSend != "" {
+		send = d.macSend
+	}
 	if !ui.numLock && d.numSend != "" {
 		send = d.numSend
 	}
@@ -693,14 +769,22 @@ func (ui *keyboardUI) sendChord(key string) {
 	}
 	parts = append(parts, key)
 	ui.snd.enqueue("keycode=" + strings.Join(parts, "+"))
+	ui.clearSticky()
+}
 
-	// A sticky modifier applies to one key only; a locked one stays down.
+// clearSticky spends the sticky latches: a sticky modifier — and a sticky fn —
+// applies to one key only, while a locked one stays down.
+func (ui *keyboardUI) clearSticky() {
 	cleared := false
 	for m, level := range ui.mods {
 		if level == latchSticky {
 			ui.mods[m] = latchOff
 			cleared = true
 		}
+	}
+	if ui.fn == latchSticky {
+		ui.fn = latchOff
+		cleared = true
 	}
 	if cleared {
 		ui.refreshKeys()
@@ -829,6 +913,9 @@ func (c *keyCap) face() string {
 	if c.def.numFace != "" && !c.ui.numLock {
 		return c.def.numFace
 	}
+	if c.def.fnFace != "" && c.ui.fnActive() {
+		return c.def.fnFace
+	}
 	if c.def.shiftFace != "" && c.ui.modLevel("SHIFT") != latchOff {
 		return c.def.shiftFace
 	}
@@ -843,8 +930,17 @@ func (c *keyCap) sends() string {
 	if c.def.kind == kindMod {
 		return c.ui.modOf(c.def)
 	}
+	if c.def.kind == kindFn {
+		if c.ui.mac {
+			return "" // fn latches locally; nothing goes to the board
+		}
+		return c.def.send
+	}
 	if !c.ui.numLock && c.def.numSend != "" {
 		return c.def.numSend
+	}
+	if c.ui.mac && c.def.macSend != "" {
+		return c.def.macSend
 	}
 	return c.def.send
 }
@@ -859,11 +955,14 @@ func (c *keyCap) pressed() bool {
 	return name != "" && c.ui.held[name]
 }
 
-// latch is the highlight level to draw this key at. Only modifiers latch:
-// Num Lock already shows in the legends on the keypad itself.
+// latch is the highlight level to draw this key at. Only modifiers and fn
+// latch: Num Lock already shows in the legends on the keypad itself.
 func (c *keyCap) latch() int {
 	if c.def.kind == kindMod {
 		return c.ui.mods[c.ui.modOf(c.def)]
+	}
+	if c.def.kind == kindFn && c.ui.mac {
+		return c.ui.fn
 	}
 	return latchOff
 }
@@ -873,7 +972,13 @@ func (c *keyCap) MouseDown(*desktop.MouseEvent)  { c.down = true; c.Refresh() }
 func (c *keyCap) MouseUp(*desktop.MouseEvent)    { c.down = false; c.Refresh() }
 func (c *keyCap) MouseIn(*desktop.MouseEvent)    { c.hovered = true; c.Refresh() }
 func (c *keyCap) MouseMoved(*desktop.MouseEvent) {}
-func (c *keyCap) Cursor() desktop.Cursor         { return desktop.PointerCursor }
+
+func (c *keyCap) Cursor() desktop.Cursor {
+	if c.ui.hides(c.def) {
+		return desktop.DefaultCursor
+	}
+	return desktop.PointerCursor
+}
 
 // MouseOut clears the pressed look as well as the hover: a button released over
 // a different key never sends this one its MouseUp, and the keycap would sit
@@ -925,6 +1030,15 @@ func (r *keyCapRenderer) MinSize() fyne.Size {
 
 func (r *keyCapRenderer) Refresh() {
 	c := r.cap
+	// A key the target's board doesn't have draws as the empty space it
+	// occupies on that layout — still here, just invisible and inert.
+	if c.ui.hides(c.def) {
+		r.bg.FillColor, r.bg.StrokeWidth = color.Transparent, 0
+		r.label.Text = ""
+		r.bg.Refresh()
+		r.label.Refresh()
+		return
+	}
 	base := theme.Color(theme.ColorNameButton)
 	ink := theme.Color(theme.ColorNameForeground)
 	// The states are told apart by depth of grey rather than by hue, so the
@@ -1515,6 +1629,7 @@ func main() {
 		target.OnChanged = func(s string) {
 			if mac := s == targetMac; mac != ui.mac {
 				ui.mac = mac
+				ui.fn = latchOff // the key that held it just left the board
 				prefs.SetString(prefTarget, s)
 				ui.refreshKeys()
 			}
