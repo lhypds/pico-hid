@@ -27,49 +27,16 @@ Setup
 
 2. Copy `settings.toml.example` to `settings.toml`, set your WiFi SSID and password.  
 
-3. Run `./upload.sh`. It collects everything the board needs — `code.py`, `boot.py`,
-   `lib/`, and your `settings.toml` — into `upload-to-board/`. Copy that folder's
-   contents onto the `CIRCUITPY` drive.  
+3. Run `./upload.sh` to upload the code to the board.
+
+4. Run `./reboot.sh` to reboot the board.
+
+
+Monitoring
+----------
 
 Use `screen.sh` to open a serial console to the board.  
 You should see it booting and connecting to WiFi.  
-
-Re-power it (a full power-cycle, not a soft reload — `boot.py` only runs at hard reset).  
-Done.  
-
-
-Finding the board's address
----------------------------
-
-You no longer need to scan the local network. Two options are provided:
-
-* **`ip.txt` / `hostname.txt`** — on every boot the board writes its address to
-  these files on the `CIRCUITPY` drive. Open the drive on your PC to read them, e.g.:
-
-  ```
-  ip.txt:       192.168.1.42
-  hostname.txt: pico-hid-3f9a.local
-  ```
-
-  This requires `boot.py`, which remounts the filesystem so the board can write to it,
-  while keeping the drive writable from the PC too (`disable_concurrent_write_protection`).
-  There's a small theoretical risk of filesystem corruption if the PC and the board both
-  write at the exact same instant, but the board only writes briefly at boot / on a fatal
-  error, so in practice this is safe.
-
-* **mDNS** — the board advertises itself so you can reach it at a fixed `.local` name
-  regardless of the DHCP-assigned IP, e.g. `http://pico-hid-3f9a.local`.
-
-  Each board must have a unique name or multiple devices collide. By default the name is
-  `pico-hid-XXXX`, where `XXXX` is derived from the board's hardware UID (stable per board).
-  Set `MDNS_HOSTNAME` in `settings.toml` to override it with a friendly name, e.g.
-  `MDNS_HOSTNAME=pico-livingroom` → reachable at `pico-livingroom.local`.
-
-  The server listens on port `80`, so no port is needed in the URL.
-
-If WiFi fails to connect, or another fatal startup/runtime error occurs, the board
-writes a description of it to `error.txt` on the `CIRCUITPY` drive. It's cleared at
-the start of every boot, so a stale `error.txt` from a previous run never lingers.
 
 
 API Interface
@@ -104,7 +71,9 @@ Mouse event support:
    `MOVE(x,y)`  
 Note: the `x` and `y` is relative coordinate.  
 
-* Auto Movement
+
+Auto Movement
+-------------
 
 The board periodically jiggles the mouse every `MOUSE_MOVE_INTERVAL` seconds
 (set in `settings.toml`, defaults to 30 if unset). Whether it starts on boot is
@@ -129,8 +98,8 @@ It's plain HTML/CSS/JS with no build step, so editing it is just editing those t
 files directly; `upload.sh` copies the `public/` folder to the board like everything else.
 
 
-Client Code
------------
+Macro
+-----
 
 There is a client example code (`client/client_example.go`) written in Go language.  
 You can add your own code in `main()`.  
