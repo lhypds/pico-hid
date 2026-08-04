@@ -75,8 +75,6 @@ from a previous run never lingers.
 API Interface
 -------------
 
-Find the board's address (see "Finding the board's address" above) — either its IP
-from `myip.txt` or its `.local` mDNS name.  
 Send POST request to the board (port 80 by default).  
 
 * Keyboard  
@@ -114,6 +112,21 @@ controlled by `AUTOMOVE_AUTOSTART` in `settings.toml`: `1` (or unset) starts it
 automatically, `0` boots with it off. Either way it can be toggled remotely:  
 Send `automove=START` to start the auto mouse movement.  
 Send `automove=STOP` to stop it.  
+
+
+Web UI
+------
+
+Visiting the board's address in a browser (e.g. `http://pico-hid-3f9a.local`) serves a
+small control page from the `public/` folder (`index.html`, `style.css`, `app.js`):
+
+* A text field — sends whatever you type via `typing=`.
+* A square trackpad area — click for a left click, right-click for a right click,
+  double-click for a double click, and dragging moves the cursor (translated into
+  relative `mouse=MOVE(dx,dy)` calls).
+
+It's plain HTML/CSS/JS with no build step, so editing it is just editing those three
+files directly; `upload.sh` copies the `public/` folder to the board like everything else.
 
 
 Client Code

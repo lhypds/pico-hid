@@ -1,0 +1,31 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1" />
+<title>Pico HID Remote</title>
+<link rel="stylesheet" href="/style.css" />
+</head>
+<body>
+<main class="container">
+  <h1>Pico HID Remote</h1>
+
+  <section class="panel">
+    <label for="text-input">Send text</label>
+    <div class="row">
+      <input id="text-input" type="text" placeholder="Type here and press Enter..." autocomplete="off" autocapitalize="off" spellcheck="false" />
+      <button id="send-btn" type="button">Send</button>
+    </div>
+  </section>
+
+  <section class="panel">
+    <label>Trackpad</label>
+    <div id="trackpad"></div>
+    <p class="hint">Click = left click &middot; right-click = right click &middot; double-click = double click &middot; drag = move cursor</p>
+  </section>
+
+  <p id="status" class="status"></p>
+</main>
+<script src="/app.js"></script>
+</body>
+</html>

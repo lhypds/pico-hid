@@ -127,7 +127,7 @@ except Exception as e:
     sys.exit(1)
 print(f"Listening on {HOST}:{PORT}")
 print(
-    "Please send request with raw text: typing=your_text_string or keycode=your_key or mouse=LEFT_CLICK(x,y) or mouse=RIGHT_CLICK(x,y) or mouse=MOVE(x,y) or automove=START/STOP"
+    "Please send request with raw text: typing=your_text_string or keycode=your_key or mouse=CLICK(x,y) or mouse=RIGHT_CLICK(x,y) or mouse=MOVE(x,y) or automove=START/STOP. Or open this device's IP in a browser for a simple control UI."
 )
 
 # Mapping of key names to Keycode values
@@ -251,6 +251,50 @@ auto_move_enabled = _autostart is None or str(_autostart).strip().lower() not in
 )
 print(f"Auto mouse movement on boot: {'enabled' if auto_move_enabled else 'disabled'}")
 
+# Static files for the browser-based control UI, served on GET requests.
+STATIC_FILES = {
+    "/": ("public/index.html", "text/html"),
+    "/index.html": ("public/index.html", "text/html"),
+    "/style.css": ("public/style.css", "text/css"),
+    "/app.js": ("public/app.js", "application/javascript"),
+}
+
+
+def send_all(sock, data):
+    view = memoryview(data)
+    sent = 0
+    while sent < len(view):
+        sent += sock.send(view[sent:])
+
+
+def send_response(sock, status, content_type, body):
+    if isinstance(body, str):
+        body = body.encode("utf8")
+    headers = (
+        f"HTTP/1.1 {status}\r\n"
+        f"Content-Type: {content_type}\r\n"
+        f"Content-Length: {len(body)}\r\n"
+        "Connection: close\r\n"
+        "\r\n"
+    )
+    send_all(sock, headers.encode("utf8") + body)
+
+
+def serve_static(sock, path):
+    entry = STATIC_FILES.get(path.split("?")[0])
+    if entry is None:
+        send_response(sock, "404 Not Found", "text/plain", "Not Found")
+        return
+    file_path, content_type = entry
+    try:
+        with open(file_path, "rb") as f:
+            body = f.read()
+        send_response(sock, "200 OK", content_type, body)
+    except OSError as e:
+        print(f"Could not read {file_path}: {e}")
+        send_response(sock, "500 Internal Server Error", "text/plain", "Internal Server Error")
+
+
 while True:
     current_time = time.monotonic()
 
@@ -259,89 +303,100 @@ while True:
         client_socket, client_address = server_socket.accept()
         print(f"Connection from {client_address}")
 
-        buffer = bytearray(1024)
+        buffer = bytearray(2048)
         bytes_received = client_socket.recv_into(buffer)
         request_str = str(buffer[:bytes_received], "utf8")
 
         # Debug request
         # print(f"Received: {request_str}")
 
-        # Check if the request contains "keycode"
-        if "keycode" in request_str:
-            keys = request_str.split("=")[1].strip().split(",")
-            for key in keys:
-                if key in keycode_map:
-                    keycode, requires_shift = keycode_map[key]
-                    print(f"Triggering keyboard event for key: {key}")
-                    if requires_shift:
-                        keyboard.press(Keycode.SHIFT, keycode)
-                        time.sleep(wt)
-                        keyboard.release_all()
-                        time.sleep(wt)
+        request_line = request_str.split("\r\n", 1)[0]
+        request_parts = request_line.split(" ")
+        method = request_parts[0] if request_parts else ""
+        path = request_parts[1] if len(request_parts) > 1 else "/"
+        body = request_str.split("\r\n\r\n", 1)[1] if "\r\n\r\n" in request_str else ""
+
+        if method == "GET":
+            serve_static(client_socket, path)
+        else:
+            # Check if the request body starts with "keycode="
+            if body.startswith("keycode="):
+                keys = body.split("=", 1)[1].strip().split(",")
+                for key in keys:
+                    if key in keycode_map:
+                        keycode, requires_shift = keycode_map[key]
+                        print(f"Triggering keyboard event for key: {key}")
+                        if requires_shift:
+                            keyboard.press(Keycode.SHIFT, keycode)
+                            time.sleep(wt)
+                            keyboard.release_all()
+                            time.sleep(wt)
+                        else:
+                            keyboard.press(keycode)
+                            time.sleep(wt)
+                            keyboard.release_all()
+                            time.sleep(wt)
                     else:
-                        keyboard.press(keycode)
-                        time.sleep(wt)
-                        keyboard.release_all()
-                        time.sleep(wt)
+                        print(f"Invalid key: {key}")
+
+            elif body.startswith("typing="):
+                text = body.split("=", 1)[1].strip()
+                print(f"Typing text: {text}")
+                keyboard_layout.write(text)
+
+            # Check if the request body starts with "automove="
+            elif body.startswith("automove="):
+                command = body.split("=", 1)[1].strip()
+                if command == "START":
+                    auto_move_enabled = True
+                    last_mouse_move_time = current_time
+                    print("Auto mouse movement started")
+                elif command == "STOP":
+                    auto_move_enabled = False
+                    print("Auto mouse movement stopped")
                 else:
-                    print(f"Invalid key: {key}")
+                    print(f"Invalid automove command: {command}")
 
-        elif "typing" in request_str:
-            text = request_str.split("=")[1].strip()
-            print(f"Typing text: {text}")
-            keyboard_layout.write(text)
+            # Check if the request body starts with "mouse="
+            elif body.startswith("mouse="):
+                action_str = body.split("=", 1)[1].strip()
+                action, coords = (
+                    action_str.split("(")[0].strip(),
+                    action_str.split("(")[1].strip(),
+                )
 
-        # Check if the request contains "automove"
-        elif "automove" in request_str:
-            command = request_str.split("=")[1].strip()
-            if command == "START":
-                auto_move_enabled = True
-                last_mouse_move_time = current_time
-                print("Auto mouse movement started")
-            elif command == "STOP":
-                auto_move_enabled = False
-                print("Auto mouse movement stopped")
-            else:
-                print(f"Invalid automove command: {command}")
+                # Parse the coordinates
+                x, y = parse_coordinates(f"({coords}")
+                if x is None or y is None:
+                    print(f"Invalid mouse coordinates: {coords}")
+                print(f"Triggering mouse event: {action} at x: {x}, y: {y}")
 
-        # Check if the request contains "mouse"
-        elif "mouse" in request_str:
-            action_str = request_str.split("=")[1].strip()
-            action, coords = (
-                action_str.split("(")[0].strip(),
-                action_str.split("(")[1].strip(),
-            )
+                if action == "CLICK":
+                    mouse.move(x, y)
+                    time.sleep(wt)
+                    mouse.click(Mouse.LEFT_BUTTON)
+                    time.sleep(wt)
+                elif action == "RIGHT_CLICK":
+                    mouse.move(x, y)
+                    time.sleep(wt)
+                    mouse.click(Mouse.RIGHT_BUTTON)
+                    time.sleep(wt)
+                elif action == "DOUBLE_CLICK":
+                    mouse.move(x, y)
+                    time.sleep(wt)
+                    mouse.click(Mouse.LEFT_BUTTON)
+                    mouse.click(Mouse.LEFT_BUTTON)
+                    time.sleep(wt)
+                elif action == "MOVE":
+                    # No trailing sleep here: nothing else follows in this
+                    # request, and the web UI's trackpad drag sends many of
+                    # these in a row, so latency here is directly felt.
+                    mouse.move(x, y)
+                else:
+                    print(f"Invalid mouse action: {action}")
 
-            # Parse the coordinates
-            x, y = parse_coordinates(f"({coords}")
-            if x is None or y is None:
-                print(f"Invalid mouse coordinates: {coords}")
-            print(f"Triggering mouse event: {action} at x: {x}, y: {y}")
+            send_response(client_socket, "200 OK", "text/plain", "OK")
 
-            if action == "CLICK":
-                mouse.move(x, y)
-                time.sleep(wt)
-                mouse.click(Mouse.LEFT_BUTTON)
-                time.sleep(wt)
-            elif action == "RIGHT_CLICK":
-                mouse.move(x, y)
-                time.sleep(wt)
-                mouse.click(Mouse.RIGHT_BUTTON)
-                time.sleep(wt)
-            elif action == "DOUBLE_CLICK":
-                mouse.move(x, y)
-                time.sleep(wt)
-                mouse.click(Mouse.LEFT_BUTTON)
-                mouse.click(Mouse.LEFT_BUTTON)
-                time.sleep(wt)
-            elif action == "MOVE":
-                mouse.move(x, y)
-                time.sleep(wt)
-            else:
-                print(f"Invalid mouse action: {action}")
-
-        response = "HTTP/1.1 200 OK\r\nContent-Type: text/plain\r\n\r\nOK"
-        client_socket.send(response.encode("utf8"))
         client_socket.close()
 
     except Exception as e:

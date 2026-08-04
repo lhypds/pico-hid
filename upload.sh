@@ -10,6 +10,7 @@ mkdir -p "$DEST"
 
 cp code.py boot.py "$DEST"/
 cp -r lib "$DEST"/
+cp -r public "$DEST"/
 
 if [ -f settings.toml ]; then
     cp settings.toml "$DEST"/
