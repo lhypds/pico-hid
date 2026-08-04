@@ -15,18 +15,19 @@ if [ -z "$PORT" ]; then
     exit 1
 fi
 
-# Check the port is free before sending anything — if something else (e.g.
-# an attached ./screen.sh) has it open, bail out instead of sending a
-# reboot command that may or may not actually reach the board. Checked via
+# Free up the port: a screen.sh session (attached or detached) holds it
+# open, which would otherwise make our writes below unreliable — this
+# device doesn't consistently enforce exclusive-open locking, so a plain
+# busy check can't be trusted to catch it.
+./screen-kill.sh
+
+# In case something other than screen.sh still holds the port, checked via
 # lsof (who actually holds it open) rather than by probing with our own
-# open(): this device doesn't reliably enforce exclusive-open locking, so a
-# probe open can succeed even while screen.sh holds the port, which would
-# defeat the check.
+# open(), for the same reliability reason as above.
 if command -v lsof >/dev/null 2>&1; then
     HOLDER_PIDS=$(lsof -t -- "$PORT" 2>/dev/null || true)
     if [ -n "$HOLDER_PIDS" ]; then
-        echo "$PORT is busy — held open by PID(s): $(echo "$HOLDER_PIDS" | tr '\n' ' ')" >&2
-        echo "Detach from ./screen.sh first (Ctrl-A then d), or quit it, then re-run this script." >&2
+        echo "$PORT is still busy — held open by PID(s): $(echo "$HOLDER_PIDS" | tr '\n' ' ')" >&2
         exit 1
     fi
 fi
