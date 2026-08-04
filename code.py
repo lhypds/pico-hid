@@ -240,10 +240,93 @@ keycode_map = {
     "F10": (Keycode.F10, False),
     "F11": (Keycode.F11, False),
     "F12": (Keycode.F12, False),
+    "F13": (Keycode.F13, False),
+    "F14": (Keycode.F14, False),
+    "F15": (Keycode.F15, False),
+    "F16": (Keycode.F16, False),
+    "F17": (Keycode.F17, False),
+    "F18": (Keycode.F18, False),
+    "F19": (Keycode.F19, False),
+    "F20": (Keycode.F20, False),
+    "F21": (Keycode.F21, False),
+    "F22": (Keycode.F22, False),
+    "F23": (Keycode.F23, False),
+    "F24": (Keycode.F24, False),
     "TAB": (Keycode.TAB, False),
     "ENTER": (Keycode.ENTER, False),
     "SPACE": (Keycode.SPACE, False),
+    # Modifiers. Only useful combined into a chord ("CTRL+c"); pressed alone
+    # they do nothing on the target machine.
+    "CTRL": (Keycode.CONTROL, False),
+    "CONTROL": (Keycode.CONTROL, False),
+    "SHIFT": (Keycode.SHIFT, False),
+    "ALT": (Keycode.ALT, False),
+    "OPTION": (Keycode.ALT, False),
+    "GUI": (Keycode.GUI, False),
+    "CMD": (Keycode.GUI, False),
+    "COMMAND": (Keycode.GUI, False),
+    "WIN": (Keycode.GUI, False),
+    "WINDOWS": (Keycode.GUI, False),
+    "META": (Keycode.GUI, False),
+    # Editing and navigation
+    "ESC": (Keycode.ESCAPE, False),
+    "ESCAPE": (Keycode.ESCAPE, False),
+    "BACKSPACE": (Keycode.BACKSPACE, False),
+    "DELETE": (Keycode.DELETE, False),
+    "INSERT": (Keycode.INSERT, False),
+    "HOME": (Keycode.HOME, False),
+    "END": (Keycode.END, False),
+    "PAGE_UP": (Keycode.PAGE_UP, False),
+    "PAGE_DOWN": (Keycode.PAGE_DOWN, False),
+    "CAPS_LOCK": (Keycode.CAPS_LOCK, False),
+    "PRINT_SCREEN": (Keycode.PRINT_SCREEN, False),
+    "SCROLL_LOCK": (Keycode.SCROLL_LOCK, False),
+    "PAUSE": (Keycode.PAUSE, False),
+    "APPLICATION": (Keycode.APPLICATION, False),
+    # Punctuation, by physical key. The shifted character (e.g. "_" on MINUS)
+    # comes from adding SHIFT, so the target machine's own layout decides what
+    # actually gets typed.
+    "MINUS": (Keycode.MINUS, False),
+    "EQUALS": (Keycode.EQUALS, False),
+    "LEFT_BRACKET": (Keycode.LEFT_BRACKET, False),
+    "RIGHT_BRACKET": (Keycode.RIGHT_BRACKET, False),
+    "BACKSLASH": (Keycode.BACKSLASH, False),
+    "SEMICOLON": (Keycode.SEMICOLON, False),
+    "QUOTE": (Keycode.QUOTE, False),
+    "GRAVE_ACCENT": (Keycode.GRAVE_ACCENT, False),
+    "COMMA": (Keycode.COMMA, False),
+    "PERIOD": (Keycode.PERIOD, False),
+    "FORWARD_SLASH": (Keycode.FORWARD_SLASH, False),
 }
+
+
+def press_chord(chord):
+    """Press every key in a "+"-joined chord at once, e.g. "CTRL+SHIFT+c".
+
+    Held simultaneously and released together, which is what makes a shortcut
+    register as a shortcut instead of separate keystrokes.
+    """
+    codes = []
+    for token in chord.split("+"):
+        token = token.strip()
+        if not token:
+            continue
+        entry = keycode_map.get(token)
+        if entry is None:
+            print(f"Invalid key: {token}")
+            return
+        code, requires_shift = entry
+        if requires_shift and Keycode.SHIFT not in codes:
+            codes.append(Keycode.SHIFT)
+        if code not in codes:
+            codes.append(code)
+
+    if not codes:
+        return
+    keyboard.press(*codes)
+    time.sleep(wt)
+    keyboard.release_all()
+    time.sleep(wt)
 
 
 def parse_coordinates(action_str):
@@ -354,24 +437,11 @@ while True:
             client_socket = None
 
             # Check if the request body starts with "keycode="
+            # "," separates keys pressed one after another, "+" joins keys held
+            # together as a chord: "CTRL+c" or "CTRL+c,CTRL+v".
             if body.startswith("keycode="):
-                keys = body.split("=", 1)[1].strip().split(",")
-                for key in keys:
-                    if key in keycode_map:
-                        keycode, requires_shift = keycode_map[key]
-                        print(f"Triggering keyboard event for key: {key}")
-                        if requires_shift:
-                            keyboard.press(Keycode.SHIFT, keycode)
-                            time.sleep(wt)
-                            keyboard.release_all()
-                            time.sleep(wt)
-                        else:
-                            keyboard.press(keycode)
-                            time.sleep(wt)
-                            keyboard.release_all()
-                            time.sleep(wt)
-                    else:
-                        print(f"Invalid key: {key}")
+                for chord in body.split("=", 1)[1].strip().split(","):
+                    press_chord(chord)
 
             elif body.startswith("typing="):
                 text = body.split("=", 1)[1].strip()

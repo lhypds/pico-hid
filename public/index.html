@@ -56,11 +56,21 @@
         aspect-ratio: 1 / 1;
         padding: 0;
         border: 1px solid var(--ink);
-        background: var(--ink);
-        color: var(--bg);
+        background: var(--bg);
+        color: var(--ink);
         font: inherit;
         font-size: 18px;
         cursor: pointer;
+      }
+
+      /* Marks which button is the live one; the two swap on mode change. */
+      button.filled {
+        background: var(--ink);
+        color: var(--bg);
+      }
+
+      .row button + button {
+        margin-left: -1px; /* collapse the doubled border between buttons */
       }
 
       button:hover {
@@ -93,7 +103,13 @@
     <main class="container">
       <div class="row">
         <input id="text-input" type="text" autocomplete="off" autocapitalize="off" spellcheck="false" />
-        <button id="send-btn" type="button" aria-label="Send">↵</button>
+        <button id="send-btn" type="button" class="filled" aria-label="Send">↵</button>
+        <button id="kb-btn" type="button" aria-label="Keyboard mirror mode" aria-pressed="false">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">
+            <rect x="2" y="6" width="20" height="12" />
+            <path d="M6 10h.01M10 10h.01M14 10h.01M18 10h.01M8 14h8" />
+          </svg>
+        </button>
       </div>
 
       <div id="trackpad"></div>
@@ -106,6 +122,8 @@
       }
 
       const textInput = document.getElementById("text-input");
+      const sendBtn = document.getElementById("send-btn");
+      const kbBtn = document.getElementById("kb-btn");
 
       function sendText() {
         const text = textInput.value;
@@ -115,10 +133,174 @@
         textInput.focus();
       }
 
-      document.getElementById("send-btn").addEventListener("click", sendText);
-      textInput.addEventListener("keydown", (e) => {
-        if (e.key === "Enter") sendText();
+      // The two buttons form a mode switch, so in mirror mode this returns to
+      // input mode instead of sending — the field holds a key display, not text.
+      sendBtn.addEventListener("click", () => {
+        if (mirroring) setMirroring(false);
+        else sendText();
       });
+      textInput.addEventListener("keydown", (e) => {
+        if (!mirroring && e.key === "Enter") sendText();
+      });
+
+      // --- Keyboard mirror mode ---
+      // Physical-key names, keyed by KeyboardEvent.code. Using .code rather
+      // than .key means we forward which key was pressed, not the character it
+      // produced, so the target machine applies its own layout — that's what
+      // makes shifted keys and shortcuts land correctly.
+      const KEY_BY_CODE = {
+        Space: "SPACE",
+        Enter: "ENTER",
+        NumpadEnter: "ENTER",
+        Tab: "TAB",
+        Backspace: "BACKSPACE",
+        Delete: "DELETE",
+        Escape: "ESCAPE",
+        Insert: "INSERT",
+        Home: "HOME",
+        End: "END",
+        PageUp: "PAGE_UP",
+        PageDown: "PAGE_DOWN",
+        CapsLock: "CAPS_LOCK",
+        PrintScreen: "PRINT_SCREEN",
+        ScrollLock: "SCROLL_LOCK",
+        Pause: "PAUSE",
+        ContextMenu: "APPLICATION",
+        ArrowUp: "UP",
+        ArrowDown: "DOWN",
+        ArrowLeft: "LEFT",
+        ArrowRight: "RIGHT",
+        Minus: "MINUS",
+        Equal: "EQUALS",
+        BracketLeft: "LEFT_BRACKET",
+        BracketRight: "RIGHT_BRACKET",
+        Backslash: "BACKSLASH",
+        Semicolon: "SEMICOLON",
+        Quote: "QUOTE",
+        Backquote: "GRAVE_ACCENT",
+        Comma: "COMMA",
+        Period: "PERIOD",
+        Slash: "FORWARD_SLASH",
+      };
+
+      const MODIFIER_CODES = new Set([
+        "ControlLeft",
+        "ControlRight",
+        "ShiftLeft",
+        "ShiftRight",
+        "AltLeft",
+        "AltRight",
+        "MetaLeft",
+        "MetaRight",
+      ]);
+
+      // Display only — macOS-style symbols for the key readout. The chord sent
+      // to the board still uses the plain names above.
+      const MOD_SYMBOL = { CTRL: "^", ALT: "⌥", SHIFT: "⇧", GUI: "⌘" };
+      const KEY_LABEL = {
+        SPACE: "␣",
+        ENTER: "⏎",
+        TAB: "⇥",
+        BACKSPACE: "⌫",
+        DELETE: "⌦",
+        ESCAPE: "⎋",
+        INSERT: "Ins",
+        HOME: "↖",
+        END: "↘",
+        PAGE_UP: "⇞",
+        PAGE_DOWN: "⇟",
+        CAPS_LOCK: "⇪",
+        PRINT_SCREEN: "PrtSc",
+        SCROLL_LOCK: "ScrLk",
+        APPLICATION: "▤",
+        UP: "↑",
+        DOWN: "↓",
+        LEFT: "←",
+        RIGHT: "→",
+        MINUS: "-",
+        EQUALS: "=",
+        LEFT_BRACKET: "[",
+        RIGHT_BRACKET: "]",
+        BACKSLASH: "\\",
+        SEMICOLON: ";",
+        QUOTE: "'",
+        GRAVE_ACCENT: "`",
+        COMMA: ",",
+        PERIOD: ".",
+        FORWARD_SLASH: "/",
+      };
+
+      let mirroring = false;
+
+      // heldModifiers() already emits Control, Option, Shift, Command — the
+      // order Apple writes them in — so a plain join matches the convention.
+      function modSymbols(mods) {
+        return mods.map((m) => MOD_SYMBOL[m]).join("");
+      }
+
+      function keyLabel(name) {
+        return KEY_LABEL[name] || (name.length === 1 ? name.toUpperCase() : name);
+      }
+
+      function keyName(code) {
+        if (/^Key[A-Z]$/.test(code)) return code.slice(3).toLowerCase();
+        if (/^Digit[0-9]$/.test(code)) return code.slice(5);
+        if (/^Numpad[0-9]$/.test(code)) return code.slice(6);
+        if (/^F([1-9]|1[0-9]|2[0-4])$/.test(code)) return code;
+        return KEY_BY_CODE[code] || null;
+      }
+
+      function heldModifiers(e) {
+        const mods = [];
+        if (e.ctrlKey) mods.push("CTRL");
+        if (e.altKey) mods.push("ALT");
+        if (e.shiftKey) mods.push("SHIFT");
+        if (e.metaKey) mods.push("GUI");
+        return mods;
+      }
+
+      function onMirrorKey(e) {
+        // Swallow every key while mirroring, so shortcuts act on the target
+        // machine instead of this browser. Note the OS keeps a few for itself
+        // (Cmd+Tab, Alt+Tab) — those can't be forwarded.
+        e.preventDefault();
+        if (e.repeat) return; // don't flood the board with auto-repeat
+
+        const mods = heldModifiers(e);
+        if (MODIFIER_CODES.has(e.code)) {
+          textInput.value = modSymbols(mods);
+          return;
+        }
+
+        const name = keyName(e.code);
+        if (!name) {
+          textInput.value = e.code + " (unsupported)";
+          return;
+        }
+
+        textInput.value = modSymbols(mods) + keyLabel(name);
+        sendCommand("keycode=" + mods.concat(name).join("+"));
+      }
+
+      function setMirroring(on) {
+        mirroring = on;
+        kbBtn.classList.toggle("filled", on);
+        kbBtn.setAttribute("aria-pressed", String(on));
+        sendBtn.classList.toggle("filled", !on);
+        textInput.readOnly = on;
+        textInput.value = "";
+        if (on) {
+          // Listen on window so keys are caught wherever focus sits, and drop
+          // focus from the field so the caret doesn't imply it's editable.
+          window.addEventListener("keydown", onMirrorKey);
+          textInput.blur();
+        } else {
+          window.removeEventListener("keydown", onMirrorKey);
+          textInput.focus(); // ready to type straight away
+        }
+      }
+
+      kbBtn.addEventListener("click", () => setMirroring(!mirroring));
 
       const trackpad = document.getElementById("trackpad");
       trackpad.addEventListener("contextmenu", (e) => e.preventDefault());
