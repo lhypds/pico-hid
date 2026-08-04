@@ -36,7 +36,13 @@ ERR=$(mktemp)
 trap 'rm -f "$ERR"' EXIT
 
 echo "Stopping code.py on $PORT..."
-if ! printf '\x03' 2>"$ERR" >"$PORT"; then
+# The first Ctrl-C interrupts code.py, which drops to CircuitPython's
+# "Press any key to enter the REPL" screen — not a live >>> prompt yet.
+# The second Ctrl-C is that "any key": without it, whatever a caller
+# writes next has its first character eaten by that screen instead of
+# reaching the REPL, silently corrupting the command.
+if ! { printf '\x03'; sleep 0.3; printf '\x03'; } 2>"$ERR" >"$PORT"; then
     cat "$ERR" >&2
     exit 1
 fi
+sleep 0.3
