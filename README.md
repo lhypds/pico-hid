@@ -22,13 +22,10 @@ Hardware Requirements
 Setup
 -----
 
-1. Setup the CricuitPython for Raspberry Pi Pico W.  
-   Press and hold the button on the Pico, connect to PC/Macbook
-   Drag-and-drop the [.uf2 file](https://circuitpython.org/board/raspberry_pi_pico_w/) to the `RPI-RP2` drive.
-   It will auto reboot with a CircultPython environment.
+1. Setup the CircuitPython for Raspberry Pi Pico W.  
+   Refer `circuitpython_install/README.md`.
 
-2. Copy `settings.toml.example` to `settings.toml` and set your WiFi SSID and password.  
-   Optionally set `MDNS_HOSTNAME` to give this board a friendly name (see below).  
+2. Copy `settings.toml.example` to `settings.toml`, set your WiFi SSID and password.  
 
 3. Run `./upload.sh`. It collects everything the board needs — `code.py`, `boot.py`,
    `lib/`, and your `settings.toml` — into `upload-to-board/`. Copy that folder's
