@@ -115,10 +115,58 @@
       <div id="trackpad"></div>
     </main>
     <script>
-      // Fire-and-forget: failures are swallowed so an unhandled rejection
-      // can't stall the drag pump below.
+      // Every command goes through one queue, one request at a time. The board
+      // serves a single connection at a time and isn't listening at all while
+      // it holds a key down, so overlapping requests get refused — which showed
+      // up as dropped characters when typing quickly.
+      const SEND_GAP_MS = 70; // must exceed the board's per-key hold time
+      const MAX_TRIES = 2;
+
+      let inFlight = false;
+      const queue = []; // discrete commands, delivered in order and never dropped
+      let pendingDX = 0; // pointer movement, coalesced rather than queued
+      let pendingDY = 0;
+
+      // Resolves true/false instead of rejecting, so a failure can be retried
+      // and can't surface as an unhandled rejection that stalls the pump.
       function sendCommand(body) {
-        return fetch("/", { method: "POST", body }).catch(() => {});
+        return fetch("/", { method: "POST", body }).then(
+          () => true,
+          () => false,
+        );
+      }
+
+      function enqueue(body) {
+        queue.push({ body, tries: 0, retry: true });
+        pump();
+      }
+
+      function pump() {
+        if (inFlight) return;
+
+        let item = queue.shift();
+        if (!item) {
+          // Nothing queued: send accumulated movement instead. Movement is
+          // coalesced because a stale delta is worth less than a fresh one, so
+          // unlike a keystroke it's fine to merge or drop.
+          const dx = Math.round(pendingDX);
+          const dy = Math.round(pendingDY);
+          if (dx === 0 && dy === 0) return;
+          pendingDX -= dx;
+          pendingDY -= dy;
+          item = { body: `mouse=MOVE(${dx},${dy})`, tries: 0, retry: false };
+        }
+
+        inFlight = true;
+        sendCommand(item.body).then((ok) => {
+          item.tries++;
+          if (!ok && item.retry && item.tries < MAX_TRIES) queue.unshift(item);
+          // Gap before the next request so the board has finished the last one.
+          setTimeout(() => {
+            inFlight = false;
+            pump();
+          }, SEND_GAP_MS);
+        });
       }
 
       const textInput = document.getElementById("text-input");
@@ -128,7 +176,7 @@
       function sendText() {
         const text = textInput.value;
         if (!text) return;
-        sendCommand("typing=" + text);
+        enqueue("typing=" + text);
         textInput.value = "";
         textInput.focus();
       }
@@ -279,7 +327,7 @@
         }
 
         textInput.value = modSymbols(mods) + keyLabel(name);
-        sendCommand("keycode=" + mods.concat(name).join("+"));
+        enqueue("keycode=" + mods.concat(name).join("+"));
       }
 
       function setMirroring(on) {
@@ -313,28 +361,7 @@
         lastY = 0;
       let totalDX = 0,
         totalDY = 0;
-      let pendingDX = 0,
-        pendingDY = 0;
-      let moveInFlight = false;
       let pendingClickTimer = null;
-
-      // One MOVE request in flight at a time; movement arriving while it's
-      // outstanding accumulates into the next one. The board handles
-      // connections one at a time, so this paces itself to what the board can
-      // keep up with instead of outrunning it and piling up failures.
-      function flushMove() {
-        if (moveInFlight) return;
-        const dx = Math.round(pendingDX);
-        const dy = Math.round(pendingDY);
-        if (dx === 0 && dy === 0) return;
-        pendingDX -= dx;
-        pendingDY -= dy;
-        moveInFlight = true;
-        sendCommand(`mouse=MOVE(${dx},${dy})`).finally(() => {
-          moveInFlight = false;
-          flushMove(); // send whatever accumulated while this was in flight
-        });
-      }
 
       trackpad.addEventListener("pointerdown", (e) => {
         trackpad.setPointerCapture(e.pointerId);
@@ -358,30 +385,30 @@
         totalDY += dy;
         pendingDX += dx;
         pendingDY += dy;
-        flushMove();
+        pump();
       });
 
       function endDrag(e) {
         if (!dragging) return;
         dragging = false;
         trackpad.classList.remove("active");
-        flushMove();
+        pump();
 
         if (Math.hypot(totalDX, totalDY) > CLICK_MOVE_THRESHOLD) return;
 
         if (e.button === 2) {
-          sendCommand("mouse=RIGHT_CLICK(0,0)");
+          enqueue("mouse=RIGHT_CLICK(0,0)");
           return;
         }
 
         if (pendingClickTimer) {
           clearTimeout(pendingClickTimer);
           pendingClickTimer = null;
-          sendCommand("mouse=DOUBLE_CLICK(0,0)");
+          enqueue("mouse=DOUBLE_CLICK(0,0)");
         } else {
           pendingClickTimer = setTimeout(() => {
             pendingClickTimer = null;
-            sendCommand("mouse=CLICK(0,0)");
+            enqueue("mouse=CLICK(0,0)");
           }, DOUBLE_CLICK_WINDOW_MS);
         }
       }

@@ -40,6 +40,11 @@ mouse = Mouse(usb_hid.devices)
 # Ensure the keyboard and mouse objects are initialized
 time.sleep(1)
 wt = 0.2
+# Keys get a much shorter hold than wt: USB HID polls every few milliseconds, so
+# tens of ms is plenty for the host to register a press, and anything longer caps
+# how fast keys can be typed. While the board is busy sleeping here it isn't
+# accepting connections, so a slow hold is what makes fast typing lose keys.
+key_wt = 0.03
 
 wifi_ssid = os.getenv("WIFI_SSID")
 wifi_password = os.getenv("WIFI_PASSWORD")
@@ -141,7 +146,10 @@ try:
     server_socket = pool.socket(pool.AF_INET, pool.SOCK_STREAM)
     server_socket.setsockopt(pool.SOL_SOCKET, pool.SO_REUSEADDR, 1)
     server_socket.bind((HOST, PORT))
-    server_socket.listen(1)
+    # Backlog of 4: while a key is being pressed this loop isn't in accept(),
+    # and with a backlog of 1 the next request in a fast burst was refused
+    # outright — a silently lost keystroke. The extra slots let bursts wait.
+    server_socket.listen(4)
     server_socket.settimeout(1)  # Set a timeout for accept
 except Exception as e:
     message = f"Could not start server on {HOST}:{PORT}: {e}"
@@ -324,9 +332,9 @@ def press_chord(chord):
     if not codes:
         return
     keyboard.press(*codes)
-    time.sleep(wt)
+    time.sleep(key_wt)
     keyboard.release_all()
-    time.sleep(wt)
+    time.sleep(key_wt)
 
 
 def parse_coordinates(action_str):
