@@ -38,6 +38,10 @@ Monitoring
 Use `screen.sh` to open a serial console to the board.  
 You should see it booting and connecting to WiFi.  
 
+The onboard LED doubles as an activity light: it lights up whenever a request
+arrives and goes out shortly after, so you can tell at a glance whether the
+board is receiving anything without opening the console.  
+
 
 API Interface
 -------------

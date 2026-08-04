@@ -1,5 +1,6 @@
 import time
 import board
+import digitalio
 import usb_hid
 from adafruit_hid.keyboard import Keyboard
 from adafruit_hid.keycode import Keycode
@@ -36,6 +37,45 @@ except OSError:
 keyboard = Keyboard(usb_hid.devices)
 keyboard_layout = KeyboardLayoutUS(keyboard)
 mouse = Mouse(usb_hid.devices)
+
+# Onboard LED, used as an activity light: it lights up whenever a request comes
+# in. On the Pico W the LED hangs off the WiFi chip rather than a normal GPIO,
+# so guard the setup — a board without board.LED should still run the server.
+try:
+    status_led = digitalio.DigitalInOut(board.LED)
+    status_led.direction = digitalio.Direction.OUTPUT
+    status_led.value = False
+except Exception as e:
+    status_led = None
+    print(f"No onboard LED available: {e}")
+
+# How long the LED stays lit per request. Handling a single keystroke takes only
+# tens of ms, which would blink too briefly to see.
+led_min_on = 0.05
+# When the LED is due to go back off, or None while it is already off.
+led_off_after = None
+
+
+def led_on():
+    """Light the LED and schedule it to go off again."""
+    global led_off_after
+    if status_led is None:
+        return
+    status_led.value = True
+    led_off_after = time.monotonic() + led_min_on
+
+
+def service_led():
+    """Turn the LED off once it has been lit long enough.
+
+    Called from the main loop instead of switching the LED off straight after a
+    request, so waiting out the blink never delays a keystroke.
+    """
+    global led_off_after
+    if led_off_after is not None and time.monotonic() >= led_off_after:
+        status_led.value = False
+        led_off_after = None
+
 
 # Ensure the keyboard and mouse objects are initialized
 time.sleep(1)
@@ -409,11 +449,13 @@ def serve_static(sock, path):
 
 while True:
     current_time = time.monotonic()
+    service_led()
 
     # Check for new connections
     client_socket = None
     try:
         client_socket, client_address = server_socket.accept()
+        led_on()
         # The accepted socket inherits the listener's 1s timeout, which is
         # meant for polling accept(), not for talking to a client. Too short
         # here: a send() that trips it leaves the reply unsent.
