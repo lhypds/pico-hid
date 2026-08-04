@@ -299,20 +299,18 @@ while True:
     # Check for new connections
     try:
         client_socket, client_address = server_socket.accept()
-        print(f"Connection from {client_address}")
 
         buffer = bytearray(2048)
         bytes_received = client_socket.recv_into(buffer)
         request_str = str(buffer[:bytes_received], "utf8")
-
-        # Debug request
-        # print(f"Received: {request_str}")
 
         request_line = request_str.split("\r\n", 1)[0]
         request_parts = request_line.split(" ")
         method = request_parts[0] if request_parts else ""
         path = request_parts[1] if len(request_parts) > 1 else "/"
         body = request_str.split("\r\n\r\n", 1)[1] if "\r\n\r\n" in request_str else ""
+
+        print(f"{method} {path}{' ' + body if body else ''} from {client_address[0]}")
 
         if method == "GET":
             serve_static(client_socket, path)
