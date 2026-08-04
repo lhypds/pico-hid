@@ -246,7 +246,8 @@ auto_move_enabled = _autostart is None or str(_autostart).strip().lower() not in
     "no",
     "off",
 )
-print(f"Auto mouse movement on boot: {'enabled' if auto_move_enabled else 'disabled'}")
+print(f"Auto movement: {'enabled' if auto_move_enabled else 'disabled'}")
+print(f"Interval: {mouse_move_interval}s")
 
 # Static files for the browser-based control UI, served on GET requests.
 STATIC_FILES = {
