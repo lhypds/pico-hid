@@ -4,6 +4,7 @@ settings.toml
 .env
 go.mod
 go.sum
+upload-to-board/
 
 # for macOS
 .DS_Store

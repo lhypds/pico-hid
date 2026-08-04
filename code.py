@@ -17,6 +17,22 @@ import re
 
 print(sys.version)
 
+
+def write_error_file(message):
+    try:
+        with open("/error.txt", "w") as f:
+            f.write(message + "\n")
+    except OSError as e:
+        print(f"Could not write error.txt (is boot.py remounting storage?): {e}")
+
+
+# Clear any stale error from a previous boot so error.txt always reflects
+# the current run.
+try:
+    os.remove("/error.txt")
+except OSError:
+    pass
+
 keyboard = Keyboard(usb_hid.devices)
 keyboard_layout = KeyboardLayoutUS(keyboard)
 mouse = Mouse(usb_hid.devices)
@@ -29,7 +45,9 @@ wifi_ssid = os.getenv("WIFI_SSID")
 wifi_password = os.getenv("WIFI_PASSWORD")
 
 if not wifi_ssid or not wifi_password:
-    print("WiFi SSID or Password not set in environment variables")
+    message = "WiFi SSID or Password not set in environment variables"
+    print(message)
+    write_error_file(message)
     sys.exit(1)
 
 print("Connecting to WiFi: " + wifi_ssid + "...")
@@ -49,7 +67,9 @@ while retry_count < max_retries and not connected:
         time.sleep(5)  # Wait before retrying
 
 if not connected:
-    print("Could not connect to WiFi after several attempts.")
+    message = "Could not connect to WiFi after several attempts."
+    print(message)
+    write_error_file(message)
     sys.exit(1)
 
 # Print the IP address
@@ -61,10 +81,10 @@ requests = adafruit_requests.Session(pool, ssl.create_default_context())
 
 # Set up the server
 HOST = "0.0.0.0"
-PORT = 8080
+PORT = 80
 
 # Advertise over mDNS so the board is reachable at a fixed name
-# (http://<hostname>.local:8080) regardless of the DHCP-assigned IP.
+# (http://<hostname>.local) regardless of the DHCP-assigned IP.
 # Each board must have a UNIQUE hostname or multiple devices collide on the
 # network, so default to a suffix derived from the CPU's hardware UID. Set
 # MDNS_HOSTNAME in settings.toml to give a specific board a friendly name.
@@ -73,30 +93,38 @@ if not mdns_hostname:
     uid_suffix = "".join(f"{b:02x}" for b in microcontroller.cpu.uid[-2:])
     mdns_hostname = f"pico-hid-{uid_suffix}"
 
-# Write the IP and mDNS name to myip.txt on the CIRCUITPY drive so they can be
-# read from the PC without scanning the network. Requires boot.py to remount
-# storage writable; if missing the filesystem is read-only and this is skipped.
+# Write the IP and mDNS name to myip.txt / myhostname.txt on the CIRCUITPY
+# drive so they can be read from the PC without scanning the network.
+# Requires boot.py to remount storage writable; if missing the filesystem is
+# read-only and this is skipped.
 try:
     with open("/myip.txt", "w") as f:
-        f.write(f"http://{ip_address}:{PORT}\n")
-        f.write(f"http://{mdns_hostname}.local:{PORT}\n")
-    print("Wrote IP to myip.txt")
+        f.write(f"{ip_address}\n")
+    with open("/myhostname.txt", "w") as f:
+        f.write(f"{mdns_hostname}.local\n")
+    print("Wrote IP to myip.txt and hostname to myhostname.txt")
 except OSError as e:
-    print(f"Could not write myip.txt (is boot.py remounting storage?): {e}")
+    print(f"Could not write myip.txt/myhostname.txt (is boot.py remounting storage?): {e}")
 
 try:
     mdns_server = mdns.Server(wifi.radio)
     mdns_server.hostname = mdns_hostname
     mdns_server.advertise_service(service_type="_http", protocol="_tcp", port=PORT)
-    print(f"mDNS advertised: http://{mdns_hostname}.local:{PORT}")
+    print(f"mDNS advertised: http://{mdns_hostname}.local")
 except Exception as e:
     print(f"Could not start mDNS: {e}")
 
-server_socket = pool.socket(pool.AF_INET, pool.SOCK_STREAM)
-server_socket.setsockopt(pool.SOL_SOCKET, pool.SO_REUSEADDR, 1)
-server_socket.bind((HOST, PORT))
-server_socket.listen(1)
-server_socket.settimeout(1)  # Set a timeout for accept
+try:
+    server_socket = pool.socket(pool.AF_INET, pool.SOCK_STREAM)
+    server_socket.setsockopt(pool.SOL_SOCKET, pool.SO_REUSEADDR, 1)
+    server_socket.bind((HOST, PORT))
+    server_socket.listen(1)
+    server_socket.settimeout(1)  # Set a timeout for accept
+except Exception as e:
+    message = f"Could not start server on {HOST}:{PORT}: {e}"
+    print(message)
+    write_error_file(message)
+    sys.exit(1)
 print(f"Listening on {HOST}:{PORT}")
 print(
     "Please send request with raw text: typing=your_text_string or keycode=your_key or mouse=LEFT_CLICK(x,y) or mouse=RIGHT_CLICK(x,y) or mouse=MOVE(x,y) or automove=START/STOP"
@@ -321,7 +349,9 @@ while True:
         if e.errno == 116:  # ETIMEDOUT error number for timeout
             pass  # No connection in this iteration, continue to periodic task
         else:
-            print(f"An unexpected error occurred: {e}")
+            message = f"An unexpected error occurred: {e}"
+            print(message)
+            write_error_file(message)
             response = "HTTP/1.1 500 Internal Server Error\r\nContent-Type: text/plain\r\n\r\nInternal Server Error"
 
     # Perform periodic mouse movement if no connections are being handled

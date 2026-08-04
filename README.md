@@ -27,9 +27,12 @@ Setup
    Drag-and-drop the [.uf2 file](https://circuitpython.org/board/raspberry_pi_pico_w/) to the `RPI-RP2` drive.
    It will auto reboot with a CircultPython environment.
 
-2. Copy `lib`, `code.py`, and `boot.py` to the board.  
-   Copy `settings.toml.example` to `settings.toml` and set your WiFi SSID and password.  
+2. Copy `settings.toml.example` to `settings.toml` and set your WiFi SSID and password.  
    Optionally set `MDNS_HOSTNAME` to give this board a friendly name (see below).  
+
+3. Run `./upload.sh`. It collects everything the board needs — `code.py`, `boot.py`,
+   `lib/`, and your `settings.toml` — into `upload-to-board/`. Copy that folder's
+   contents onto the `CIRCUITPY` drive.  
 
 Re-power it (a full power-cycle, not a soft reload — `boot.py` only runs at hard reset).  
 Done.  
@@ -40,12 +43,12 @@ Finding the board's address
 
 You no longer need to scan the local network. Two options are provided:
 
-* **`myip.txt`** — on every boot the board writes its address to `myip.txt` on the
-  `CIRCUITPY` drive. Open the drive on your PC to read it, e.g.:
+* **`myip.txt` / `myhostname.txt`** — on every boot the board writes its address to
+  these files on the `CIRCUITPY` drive. Open the drive on your PC to read them, e.g.:
 
   ```
-  http://192.168.1.42:8080
-  http://pico-hid-3f9a.local:8080
+  myip.txt:       192.168.1.42
+  myhostname.txt: pico-hid-3f9a.local
   ```
 
   This requires `boot.py`, which remounts the filesystem so the board can write to it.
@@ -54,12 +57,19 @@ You no longer need to scan the local network. Two options are provided:
   temporarily remove `boot.py`.
 
 * **mDNS** — the board advertises itself so you can reach it at a fixed `.local` name
-  regardless of the DHCP-assigned IP, e.g. `http://pico-hid-3f9a.local:8080`.
+  regardless of the DHCP-assigned IP, e.g. `http://pico-hid-3f9a.local`.
 
   Each board must have a unique name or multiple devices collide. By default the name is
   `pico-hid-XXXX`, where `XXXX` is derived from the board's hardware UID (stable per board).
   Set `MDNS_HOSTNAME` in `settings.toml` to override it with a friendly name, e.g.
-  `MDNS_HOSTNAME=pico-livingroom` → reachable at `pico-livingroom.local:8080`.
+  `MDNS_HOSTNAME=pico-livingroom` → reachable at `pico-livingroom.local`.
+
+  The server listens on port `80`, so no port is needed in the URL.
+
+If WiFi fails to connect, or another fatal startup/runtime error occurs, the board
+writes a description of it to `error.txt` on the `CIRCUITPY` drive (same read-only
+caveat as above). It's cleared at the start of every boot, so a stale `error.txt`
+from a previous run never lingers.
 
 
 API Interface
@@ -67,7 +77,7 @@ API Interface
 
 Find the board's address (see "Finding the board's address" above) — either its IP
 from `myip.txt` or its `.local` mDNS name.  
-Send POST request to the board, port 8080.  
+Send POST request to the board (port 80 by default).  
 
 * Keyboard  
 
@@ -109,15 +119,15 @@ Send `automove=STOP` to stop it.
 Client Code
 -----------
 
-There is a client example code (`client.go`) written in Go language.  
+There is a client example code (`client/client_example.go`) written in Go language.  
 You can add your own code in `main()`.  
 
-To use it first setup with:
+To use it, `cd client` first, then set it up with:
 
 `go mod init pico-hid`  
 `go get github.com/joho/godotenv`  
 
-Add server URL in `.env` as,  
+Copy `.env.example` to `.env` and add the server URL as,  
 `PICO_HID_SERVER_URL=your_server_url`  
 
 Run it with `go run client_example.go`.  
