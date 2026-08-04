@@ -330,6 +330,50 @@
         enqueue("keycode=" + mods.concat(name).join("+"));
       }
 
+      // Browser-level shortcuts (Cmd+W, Cmd+T, Cmd+N, Cmd+Tab) are claimed by
+      // the browser before the page sees them, so preventDefault can't stop
+      // them. Two best-effort mitigations:
+      //  - Keyboard Lock hands those keys to the page instead, but it needs a
+      //    secure context plus fullscreen. The board serves plain HTTP, so it
+      //    only engages when the page is reached over HTTPS or via localhost —
+      //    hence the check, so HTTP users don't get pointless fullscreen.
+      //  - beforeunload turns an unstoppable Cmd+W into a confirm dialog rather
+      //    than an instantly closed tab.
+      const canLockKeys = !!(navigator.keyboard && navigator.keyboard.lock);
+      let tookFullscreen = false;
+
+      function warnBeforeUnload(e) {
+        e.preventDefault();
+        e.returnValue = "";
+      }
+
+      async function captureKeys() {
+        window.addEventListener("beforeunload", warnBeforeUnload);
+        if (!canLockKeys) return;
+        try {
+          if (!document.fullscreenElement) {
+            await document.documentElement.requestFullscreen();
+            tookFullscreen = true;
+          }
+          await navigator.keyboard.lock();
+        } catch {
+          // Fullscreen or lock refused — preventDefault still covers the rest.
+        }
+      }
+
+      function releaseKeys() {
+        window.removeEventListener("beforeunload", warnBeforeUnload);
+        if (canLockKeys) {
+          try {
+            navigator.keyboard.unlock();
+          } catch {}
+        }
+        if (tookFullscreen && document.fullscreenElement) {
+          tookFullscreen = false;
+          document.exitFullscreen().catch(() => {});
+        }
+      }
+
       function setMirroring(on) {
         mirroring = on;
         kbBtn.classList.toggle("filled", on);
@@ -342,8 +386,10 @@
           // focus from the field so the caret doesn't imply it's editable.
           window.addEventListener("keydown", onMirrorKey);
           textInput.blur();
+          captureKeys();
         } else {
           window.removeEventListener("keydown", onMirrorKey);
+          releaseKeys();
           textInput.focus(); // ready to type straight away
         }
       }

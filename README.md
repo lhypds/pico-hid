@@ -100,33 +100,23 @@ Send `automove=STOP` to stop it.
 Web UI
 ------
 
-Visiting the board's address in a browser (e.g. `http://ph-3f9a.local`) serves a
-small control page from `public/index.html`:
+Open the board's address in a browser (e.g. `http://ph-3f9a.local`). The page is
+`public/index.html` — one self-contained file, no build step, CSS and JS inlined so
+the board serves it in a single request.
 
-* A text field — sends whatever you type via `typing=`.
-* A trackpad area — click for a left click, right-click for a right click,
-  double-click for a double click, and dragging moves the cursor (translated into
-  relative `mouse=MOVE(dx,dy)` calls).
-* A keyboard button, right of the send button, that toggles **mirror mode**. The
-  filled button is the live one: send by default, keyboard once toggled on. While
-  it's on, every key you press is forwarded to the target machine as a `keycode=`
-  chord including modifiers, and the text field turns into a read-only display of
-  the last key. Click the button again to leave.
+* Text field — sends what you type via `typing=`.
+* Trackpad — click, right-click and double-click do the obvious thing; dragging
+  moves the cursor.
+* Keyboard button (right of send) — toggles **mirror mode**, where every key you
+  press is forwarded as a `keycode=` chord. The filled button is the live one, and
+  the text field becomes a read-only display of the last key. Click either button
+  to leave.
 
-  Mirror mode forwards the *physical* key (`KeyboardEvent.code`), not the character
-  it produced, so the target machine applies its own keyboard layout. It also
-  swallows the keys locally, so `Ctrl+C` copies on the target machine rather than in
-  your browser — which means browser shortcuts like reload stop working until you
-  toggle back out, and you must click the button (not press a key) to exit. A few
-  combinations the OS reserves for itself, such as `Cmd+Tab` or `Alt+Tab`, never
-  reach the page and so can't be forwarded. Auto-repeat from a held key is ignored,
-  to avoid flooding the board.
-
-Its CSS and JS are inlined into that single file, so loading the UI costs the board
-one request instead of one per asset — it serves connections one at a time, and the
-extra round trips were failing under load. Plain HTML/CSS/JS with no build step, so
-editing it is just editing that file; `upload.sh` copies `public/` to the board like
-everything else.
+Mirror mode sends the physical key, so the target machine applies its own layout,
+and it swallows keys locally — so exit by clicking, not by pressing Escape.
+`Cmd+W`/`Cmd+T`/`Cmd+Tab` are claimed by the browser before the page sees them and
+can't be suppressed over plain HTTP; a `beforeunload` prompt guards against
+accidentally closing the tab.
 
 
 Macro

@@ -5,12 +5,60 @@ cd "$(dirname "$0")"
 
 DEST="upload-to-board"
 
+# Default upload is just code.py and public/. EXTRA_ITEMS ship only with
+# --all, or automatically when the board doesn't have them yet.
+EXTRA_ITEMS=(boot.py lib settings.toml)
+
+ALL=0
+for arg in "$@"; do
+    case "$arg" in
+        --all) ALL=1 ;;
+        *)
+            echo "Usage: $0 [--all]" >&2
+            echo "  --all  upload boot.py, lib/ and settings.toml too, not just code.py and public/" >&2
+            exit 1
+            ;;
+    esac
+done
+
+# Look for a mounted CIRCUITPY drive (macOS, and common Linux mount points).
+# Done before staging so we can check which files the board is missing.
+BOARD=""
+for candidate in /Volumes/CIRCUITPY /media/*/CIRCUITPY /run/media/*/CIRCUITPY; do
+    if [ -d "$candidate" ]; then
+        BOARD="$candidate"
+        break
+    fi
+done
+
+ITEMS=(code.py public)
+if [ "$ALL" -eq 1 ]; then
+    ITEMS+=("${EXTRA_ITEMS[@]}")
+elif [ -n "$BOARD" ]; then
+    for item in "${EXTRA_ITEMS[@]}"; do
+        if [ ! -e "$BOARD/$item" ]; then
+            echo "$item is missing on the board — including it in this upload."
+            ITEMS+=("$item")
+        fi
+    done
+else
+    echo "No board mounted to check for missing files — staging only code.py and public/. Use --all to stage everything." >&2
+fi
+
 rm -rf "$DEST"
 mkdir -p "$DEST"
 
-cp code.py boot.py "$DEST"/
-cp -r lib "$DEST"/
-cp -r public "$DEST"/
+for item in "${ITEMS[@]}"; do
+    if [ ! -e "$item" ]; then
+        if [ "$item" = "settings.toml" ]; then
+            echo "Warning: settings.toml not found. Copy settings.toml.example to settings.toml and fill in your WiFi credentials, then re-run this script." >&2
+        else
+            echo "Warning: $item not found locally — skipping it." >&2
+        fi
+        continue
+    fi
+    cp -r "$item" "$DEST"/
+done
 
 # Shrink the control UI in the staging copy only, so public/index.html stays
 # readable. Deliberately line-based: newlines survive, which keeps trailing
@@ -45,22 +93,7 @@ else
     echo "python3 not found — shipping index.html unminified." >&2
 fi
 
-if [ -f settings.toml ]; then
-    cp settings.toml "$DEST"/
-else
-    echo "Warning: settings.toml not found. Copy settings.toml.example to settings.toml and fill in your WiFi credentials, then re-run this script." >&2
-fi
-
 echo "Upload-ready files placed in $DEST/"
-
-# Look for a mounted CIRCUITPY drive (macOS, and common Linux mount points).
-BOARD=""
-for candidate in /Volumes/CIRCUITPY /media/*/CIRCUITPY /run/media/*/CIRCUITPY; do
-    if [ -d "$candidate" ]; then
-        BOARD="$candidate"
-        break
-    fi
-done
 
 if [ -z "$BOARD" ]; then
     echo "No CIRCUITPY drive found — copy $DEST/'s contents onto it manually once it's plugged in."
@@ -68,7 +101,8 @@ if [ -z "$BOARD" ]; then
 fi
 
 echo
-read -r -p "Found board at $BOARD — copy $DEST/ onto it now? This overwrites its existing files. [y/N] " reply
+echo "Files to upload: $(ls "$DEST")"
+read -r -p "Found board at $BOARD — copy $DEST/ onto it now? This overwrites those files on the board. [y/N] " reply
 case "$reply" in
     [yY]|[yY][eE][sS]) ;;
     *)
