@@ -51,10 +51,11 @@ You no longer need to scan the local network. Two options are provided:
   myhostname.txt: pico-hid-3f9a.local
   ```
 
-  This requires `boot.py`, which remounts the filesystem so the board can write to it.
-  Side effect: while `boot.py` is present the drive is **read-only from the PC**, so you
-  cannot drag-drop files to update `code.py`. To edit code later, use the serial REPL or
-  temporarily remove `boot.py`.
+  This requires `boot.py`, which remounts the filesystem so the board can write to it,
+  while keeping the drive writable from the PC too (`disable_concurrent_write_protection`).
+  There's a small theoretical risk of filesystem corruption if the PC and the board both
+  write at the exact same instant, but the board only writes briefly at boot / on a fatal
+  error, so in practice this is safe.
 
 * **mDNS** — the board advertises itself so you can reach it at a fixed `.local` name
   regardless of the DHCP-assigned IP, e.g. `http://pico-hid-3f9a.local`.
@@ -67,9 +68,8 @@ You no longer need to scan the local network. Two options are provided:
   The server listens on port `80`, so no port is needed in the URL.
 
 If WiFi fails to connect, or another fatal startup/runtime error occurs, the board
-writes a description of it to `error.txt` on the `CIRCUITPY` drive (same read-only
-caveat as above). It's cleared at the start of every boot, so a stale `error.txt`
-from a previous run never lingers.
+writes a description of it to `error.txt` on the `CIRCUITPY` drive. It's cleared at
+the start of every boot, so a stale `error.txt` from a previous run never lingers.
 
 
 API Interface

@@ -1,7 +1,10 @@
 import storage
 
 # Remount the CIRCUITPY filesystem so that code.py (CircuitPython) can WRITE
-# to it. Side effect: while this is active the drive is READ-ONLY to the PC,
-# so you cannot drag-drop files to update the board. Update code.py over the
-# serial REPL, or temporarily rename/remove this file to edit from the PC.
-storage.remount("/", readonly=False)
+# to it (needed for myip.txt / myhostname.txt / error.txt). By default this
+# would make the drive READ-ONLY to the PC; disable_concurrent_write_protection
+# keeps it writable from both sides. Tradeoff: if the PC and the board happen
+# to write at the exact same instant, the filesystem could get corrupted.
+# Acceptable here since the board only writes briefly at boot / on a fatal
+# error, not continuously.
+storage.remount("/", readonly=False, disable_concurrent_write_protection=True)
