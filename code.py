@@ -437,6 +437,12 @@ def read_request(sock):
         n = sock.recv_into(buffer)
         if n == 0:  # client closed its end, nothing more is coming
             break
+        if not request:
+            # First byte arrived, so this is a real request, not an idle
+            # speculative connection — from here a slow client gets the
+            # full 5s per read (a send() that trips a short timeout would
+            # leave the reply unsent).
+            sock.settimeout(5)
         request += bytes(buffer[:n])
         if body_start < 0:
             i = request.find(b"\r\n\r\n")
@@ -496,9 +502,14 @@ while True:
         client_socket, client_address = server_socket.accept()
         led_on()
         # The accepted socket inherits the listener's 1s timeout, which is
-        # meant for polling accept(), not for talking to a client. Too short
-        # here: a send() that trips it leaves the reply unsent.
-        client_socket.settimeout(5)
+        # meant for polling accept(), not for talking to a client. But don't
+        # jump straight to a long timeout either: Safari (iOS above all)
+        # opens speculative connections it never sends a byte on, and this
+        # single-threaded loop would sit blocked on each one while real
+        # requests queue behind it — the web UI felt completely dead from an
+        # iPhone. So allow 0.5s for the first byte; read_request() relaxes
+        # the timeout to 5s once data is actually flowing.
+        client_socket.settimeout(0.5)
 
         request_str = read_request(client_socket)
 
@@ -544,7 +555,11 @@ while True:
                     press_chord(chord)
 
             elif body.startswith("typing="):
-                text = body.split("=", 1)[1].strip()
+                # No strip() here: fetch bodies arrive exact, and a lone or
+                # trailing space is a real keystroke — the web UI's mirror
+                # mode sends each space as its own typing= command, which
+                # strip() was silently swallowing.
+                text = body.split("=", 1)[1]
                 print(f"Typing text: {text}")
                 keyboard_layout.write(text)
 
@@ -596,13 +611,19 @@ while True:
                     # request, and the web UI's trackpad drag sends many of
                     # these in a row, so latency here is directly felt.
                     mouse.move(x, y)
+                elif action == "SCROLL":
+                    # Wheel notches in y; positive scrolls up. Coalesced
+                    # client-side like MOVE, so no trailing sleep either.
+                    mouse.move(0, 0, y)
                 else:
                     print(f"Invalid mouse action: {action}")
 
     except Exception as e:
-        # errno 116 (ETIMEDOUT) is just the accept() timeout — no connection
-        # this iteration. getattr because not every exception has an errno,
-        # and touching e.errno on one that doesn't would crash the server.
+        # errno 116 (ETIMEDOUT) is either the accept() poll finding no
+        # connection this iteration, or an accepted connection that never
+        # sent a byte (browsers open speculative connections and may abandon
+        # them). getattr because not every exception has an errno, and
+        # touching e.errno on one that doesn't would crash the server.
         if getattr(e, "errno", None) == 116:
             pass  # Continue to periodic task
         else:

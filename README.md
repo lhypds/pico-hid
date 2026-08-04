@@ -87,6 +87,8 @@ Mouse event support:
    Click the current position use `LEFT_CLICK(0,0)`
 2. Move  
    `MOVE(x,y)`  
+3. Scroll  
+   `SCROLL(0,n)` — turn the wheel `n` notches; positive scrolls up.  
 Note: the `x` and `y` is relative coordinate.  
 
 * De-duplication (optional)
@@ -122,7 +124,11 @@ Text Sending Mode
 
 The default. Type in the text field and press Enter or click ↵ to send it as
 `typing=`. Below that, the trackpad handles the mouse: click, right-click and
-double-click do the obvious thing, and dragging moves the cursor.
+double-click do the obvious thing, dragging moves the cursor, and the scroll
+wheel scrolls the target machine.
+
+The page works from a phone or tablet too: tap to click, two-finger tap for a
+right click, two-finger drag to scroll.
 
 
 Keyboard Mirroring Mode
@@ -136,6 +142,12 @@ It forwards the *physical* key rather than the character it produced, so the tar
 machine applies its own keyboard layout. Keys are swallowed locally, so leave by
 clicking — pressing Escape sends Escape to the target. Auto-repeat from a held key
 is ignored, to avoid flooding the board.
+
+On a touch device the mode works differently: a soft keyboard doesn't report
+physical keys (IMEs, swipe typing and autocorrect rewrite text without them), so
+the field stays editable and whatever changes in it is forwarded live. The field
+only shows the last character typed — it's a display of what was sent, not an
+editor. Return sends Enter. Only characters a US layout can type are forwarded.
 
 **Limitation: shortcuts the browser reserves can't be intercepted.** `Cmd+W`
 (close tab), `Cmd+R`, `Cmd+T`, `Cmd+N`, `Cmd+Q` and `Cmd+Tab` are handled by the

@@ -10,6 +10,7 @@
         --ink: #111;
         --bg: #fff;
         --pad: 630px;
+        --control: 46px; /* row height and button square; ≥44px touch target */
       }
 
       * {
@@ -40,12 +41,16 @@
       #text-input {
         flex: 1;
         min-width: 0;
-        padding: 10px 12px;
+        height: var(--control);
+        padding: 0 12px;
         border: 1px solid var(--ink);
         border-right: none;
+        border-radius: 0; /* iOS rounds inputs by default */
+        -webkit-appearance: none;
+        appearance: none;
         background: var(--bg);
         color: var(--ink);
-        font: inherit;
+        font: inherit; /* stays ≥16px so iOS doesn't zoom in on focus */
         outline: none;
       }
 
@@ -53,14 +58,23 @@
         display: flex;
         align-items: center;
         justify-content: center;
-        aspect-ratio: 1 / 1;
+        /* Fixed square, not aspect-ratio: Safari doesn't reliably transfer a
+           flex-stretched height through aspect-ratio, leaving tiny buttons. */
+        width: var(--control);
+        height: var(--control);
+        flex: none;
         padding: 0;
         border: 1px solid var(--ink);
+        border-radius: 0;
+        -webkit-appearance: none;
+        appearance: none;
         background: var(--bg);
         color: var(--ink);
         font: inherit;
         font-size: 18px;
         cursor: pointer;
+        touch-action: manipulation; /* no double-tap zoom on repeated taps */
+        -webkit-tap-highlight-color: transparent;
       }
 
       /* Marks which button is the live one; the two swap on mode change. */
@@ -73,8 +87,11 @@
         margin-left: -1px; /* collapse the doubled border between buttons */
       }
 
-      button:hover {
-        opacity: 0.85;
+      /* Hover only where hover exists — on touch it sticks after a tap. */
+      @media (hover: hover) {
+        button:hover {
+          opacity: 0.85;
+        }
       }
 
       button:active {
@@ -82,7 +99,7 @@
       }
 
       #trackpad {
-        --chrome: 95px;
+        --chrome: 100px; /* body padding + input row + gap */
         width: 100%;
         height: var(--pad);
         max-height: calc(100vh - var(--chrome));
@@ -92,6 +109,8 @@
         touch-action: none;
         user-select: none;
         -webkit-user-select: none;
+        -webkit-touch-callout: none; /* no long-press callout on iOS */
+        -webkit-tap-highlight-color: transparent;
       }
 
       #trackpad.active {
@@ -120,12 +139,24 @@
       // it holds a key down, so overlapping requests get refused — which showed
       // up as dropped characters when typing quickly.
       const SEND_GAP_MS = 70; // must exceed the board's per-key hold time
-      const MAX_TRIES = 2;
+      const MAX_TRIES = 3;
+      // Bound each attempt: Safari (iOS especially) keeps half-open speculative
+      // connections a request can land on, and a fetch that never settles would
+      // wedge the queue for good. A timed-out attempt is retried under the same
+      // seq token, so the board won't run it twice. Long enough to sit out the
+      // board executing a long typing= command ahead of us.
+      const SEND_TIMEOUT_MS = 6000;
+
+      // No physical keyboard means no Cmd+W-style teardown to survive, so
+      // keepalive buys nothing here — and iOS WebKit has a history of dropping
+      // keepalive fetches, so don't ask for it where it can only hurt.
+      const TOUCH_ONLY = matchMedia("(hover: none) and (pointer: coarse)").matches;
 
       let inFlight = false;
       const queue = []; // discrete commands, delivered in order and never dropped
       let pendingDX = 0; // pointer movement, coalesced rather than queued
       let pendingDY = 0;
+      let pendingScroll = 0; // wheel notches, coalesced like movement; positive scrolls up
 
       // Delivery is at-least-once: a retry can re-send a command the board
       // already ran (when the response was lost, not the request). So every
@@ -143,14 +174,18 @@
       // Resolves true/false instead of rejecting, so a failure can be retried
       // and can't surface as an unhandled rejection that stalls the pump.
       function sendCommand(body) {
-        return fetch("/", {
+        const opts = {
           method: "POST",
           body,
           // Let the request outlive the page. A shortcut the browser insists on
           // acting on (Cmd+W, Ctrl+W) tears the tab down mid-request, and
           // without this the keystroke dies before reaching the board.
-          keepalive: true,
-        }).then(
+          keepalive: !TOUCH_ONLY,
+        };
+        if (typeof AbortSignal !== "undefined" && AbortSignal.timeout) {
+          opts.signal = AbortSignal.timeout(SEND_TIMEOUT_MS);
+        }
+        return fetch("/", opts).then(
           () => true,
           () => false,
         );
@@ -161,21 +196,46 @@
         pump();
       }
 
+      // Typed characters merge into the last still-queued typing command, so
+      // fast typing doesn't build up one request per keystroke. Only items
+      // created here are extendable — merging into a keycode= would reorder.
+      function enqueueTyping(text) {
+        const last = queue[queue.length - 1];
+        if (last && last.canExtend) {
+          last.body += text;
+          return;
+        }
+        queue.push({ body: stampSeq("typing=" + text), tries: 0, retry: true, canExtend: true });
+        pump();
+      }
+
       function pump() {
         if (inFlight) return;
 
         let item = queue.shift();
         if (!item) {
-          // Nothing queued: send accumulated movement instead. Movement is
-          // coalesced because a stale delta is worth less than a fresh one, so
-          // unlike a keystroke it's fine to merge or drop.
+          // Nothing queued: send accumulated movement or scrolling instead.
+          // Both are coalesced because a stale delta is worth less than a
+          // fresh one, so unlike a keystroke it's fine to merge or drop.
           const dx = Math.round(pendingDX);
           const dy = Math.round(pendingDY);
-          if (dx === 0 && dy === 0) return;
-          pendingDX -= dx;
-          pendingDY -= dy;
-          item = { body: stampSeq(`mouse=MOVE(${dx},${dy})`), tries: 0, retry: false };
+          const notches = Math.round(pendingScroll);
+          if (dx !== 0 || dy !== 0) {
+            pendingDX -= dx;
+            pendingDY -= dy;
+            item = { body: stampSeq(`mouse=MOVE(${dx},${dy})`), tries: 0, retry: false };
+          } else if (notches !== 0) {
+            pendingScroll -= notches;
+            item = { body: stampSeq(`mouse=SCROLL(0,${notches})`), tries: 0, retry: false };
+          } else {
+            return;
+          }
         }
+
+        // Once an attempt starts the body is frozen: a retry must resend
+        // exactly what was sent the first time, or the seq dedup would eat
+        // the difference.
+        item.canExtend = false;
 
         inFlight = true;
         sendCommand(item.body).then((ok) => {
@@ -193,13 +253,33 @@
       const sendBtn = document.getElementById("send-btn");
       const kbBtn = document.getElementById("kb-btn");
 
+      // iOS "smart punctuation" rewrites quotes and dashes into typographic
+      // characters the board's US layout can't type; fold them back to ASCII.
+      const SMART_CHARS = {
+        "‘": "'",
+        "’": "'",
+        "“": '"',
+        "”": '"',
+        "–": "-",
+        "—": "-",
+        "…": "...",
+        "\u00a0": " ", // no-break space
+      };
+      const SMART_CHARS_RE = /[‘’“”–—…\u00a0]/g;
+
       function sendText() {
-        const text = textInput.value;
+        const text = textInput.value.replace(SMART_CHARS_RE, (c) => SMART_CHARS[c]);
         if (!text) return;
         enqueue("typing=" + text);
         textInput.value = "";
         textInput.focus();
       }
+
+      // Buttons must not take focus on tap: on iOS the blur would close the
+      // soft keyboard on every send. Click still fires with the default
+      // pointerdown behavior cancelled.
+      sendBtn.addEventListener("pointerdown", (e) => e.preventDefault());
+      kbBtn.addEventListener("pointerdown", (e) => e.preventDefault());
 
       // The two buttons form a mode switch, so in mirror mode this returns to
       // input mode instead of sending — the field holds a key display, not text.
@@ -208,7 +288,23 @@
         else sendText();
       });
       textInput.addEventListener("keydown", (e) => {
-        if (!mirroring && e.key === "Enter") sendText();
+        if (!mirroring) {
+          if (e.key === "Enter") sendText();
+          return;
+        }
+        // Physical-keyboard mirroring is handled by the window listener.
+        if (!TOUCH_ONLY || e.isComposing) return;
+        if (e.key === "Enter") {
+          e.preventDefault();
+          enqueue("keycode=ENTER");
+          // A sent line is finished context; start the next one clean.
+          textInput.value = "";
+          mirrorPrev = "";
+        } else if (e.key === "Backspace" && textInput.value === "") {
+          // Nothing local to delete means no input event will follow, so the
+          // field diff below can't see this one; forward it directly.
+          enqueue("keycode=BACKSPACE");
+        }
       });
 
       // --- Keyboard mirror mode ---
@@ -387,13 +483,74 @@
         }
       }
 
+      // --- Soft mirroring (touch devices) ---
+      // A soft keyboard can't be mirrored key-by-key: IMEs, swipe typing and
+      // autocorrect insert and rewrite text without producing usable keydown
+      // codes (Android reports 229/Unidentified for nearly everything). So on
+      // touch devices mirror the *field* instead of the keys: it stays
+      // editable, and whatever changes in it — characters typed, words
+      // swiped, autocorrections — is diffed and forwarded.
+      let mirrorPrev = ""; // field content already forwarded to the target
+      let composing = false; // mid-IME-composition edits aren't final yet
+
+      function foldToAscii(text) {
+        // The board types on a US layout and can't produce anything else.
+        return text.replace(SMART_CHARS_RE, (c) => SMART_CHARS[c]).replace(/[^\x20-\x7e]/g, "");
+      }
+
+      function mirrorFieldChange() {
+        const next = textInput.value;
+        let prefix = 0;
+        const max = Math.min(mirrorPrev.length, next.length);
+        while (prefix < max && mirrorPrev[prefix] === next[prefix]) prefix++;
+        let suffix = 0;
+        while (
+          suffix < max - prefix &&
+          mirrorPrev[mirrorPrev.length - 1 - suffix] === next[next.length - 1 - suffix]
+        )
+          suffix++;
+        // Replay the edit: delete what left the field, type what entered it.
+        // Both land at the *target's* cursor, so this assumes typing at the
+        // end of the field — which is what a phone keyboard does. Editing
+        // the middle of the field comes out wrong on the target.
+        for (let i = mirrorPrev.length - prefix - suffix; i > 0; i--) enqueue("keycode=BACKSPACE");
+        const inserted = foldToAscii(next.slice(prefix, next.length - suffix));
+        if (inserted) enqueueTyping(inserted);
+        // The field is a display of the last keystroke, not an editor: keep
+        // just the final character. One character is still enough context to
+        // diff the next edit, and gives backspace something to delete.
+        const tail = next.slice(-1);
+        textInput.value = tail;
+        mirrorPrev = tail;
+      }
+
+      textInput.addEventListener("compositionstart", () => {
+        composing = true;
+      });
+      textInput.addEventListener("compositionend", () => {
+        composing = false;
+        if (mirroring && TOUCH_ONLY) mirrorFieldChange();
+      });
+      textInput.addEventListener("input", (e) => {
+        if (!mirroring || !TOUCH_ONLY) return;
+        if (composing || e.isComposing) return;
+        mirrorFieldChange();
+      });
+
       function setMirroring(on) {
         mirroring = on;
         kbBtn.classList.toggle("filled", on);
         kbBtn.setAttribute("aria-pressed", String(on));
         sendBtn.classList.toggle("filled", !on);
-        textInput.readOnly = on;
         textInput.value = "";
+        mirrorPrev = "";
+        if (TOUCH_ONLY) {
+          // Soft mirroring: the field must stay editable and focused, or the
+          // soft keyboard — the thing being mirrored — would close.
+          textInput.focus();
+          return;
+        }
+        textInput.readOnly = on;
         if (on) {
           // Listen on window so keys are caught wherever focus sits, and drop
           // focus from the field so the caret doesn't imply it's editable.
@@ -412,53 +569,87 @@
       const trackpad = document.getElementById("trackpad");
       trackpad.addEventListener("contextmenu", (e) => e.preventDefault());
 
-      const CLICK_MOVE_THRESHOLD = 6; // total px below which a gesture is a click, not a drag
+      const CLICK_MOVE_THRESHOLD = 6; // px per finger below which a gesture is a tap, not a drag
       const DOUBLE_CLICK_WINDOW_MS = 300;
+      const SCROLL_PX_PER_NOTCH = 20; // finger travel that equals one wheel notch
 
-      let dragging = false;
-      let lastX = 0,
-        lastY = 0;
+      const pointers = new Map(); // fingers on the pad: pointerId -> last position
+      let primaryId = null; // the finger whose motion drives moves and scrolls
+      let gestureFingers = 0; // most fingers seen during the current gesture
       let totalDX = 0,
         totalDY = 0;
       let pendingClickTimer = null;
 
       trackpad.addEventListener("pointerdown", (e) => {
+        // Don't steal focus: mid-mirroring, a tap here would otherwise blur
+        // the text field and close the soft keyboard being mirrored.
+        e.preventDefault();
         trackpad.setPointerCapture(e.pointerId);
         trackpad.classList.add("active");
-        dragging = true;
-        lastX = e.clientX;
-        lastY = e.clientY;
-        totalDX = 0;
-        totalDY = 0;
-        pendingDX = 0;
-        pendingDY = 0;
+        pointers.set(e.pointerId, { x: e.clientX, y: e.clientY });
+        gestureFingers = Math.max(gestureFingers, pointers.size);
+        if (pointers.size === 1) {
+          primaryId = e.pointerId;
+          totalDX = 0;
+          totalDY = 0;
+          pendingDX = 0;
+          pendingDY = 0;
+        } else {
+          // A second finger turns the gesture into a scroll (or a two-finger
+          // tap): whatever movement the first finger accumulated is no longer
+          // a pointer move.
+          pendingDX = 0;
+          pendingDY = 0;
+        }
       });
 
       trackpad.addEventListener("pointermove", (e) => {
-        if (!dragging) return;
-        const dx = e.clientX - lastX;
-        const dy = e.clientY - lastY;
-        lastX = e.clientX;
-        lastY = e.clientY;
+        const p = pointers.get(e.pointerId);
+        if (!p) return;
+        const dx = e.clientX - p.x;
+        const dy = e.clientY - p.y;
+        p.x = e.clientX;
+        p.y = e.clientY;
         totalDX += dx;
         totalDY += dy;
-        pendingDX += dx;
-        pendingDY += dy;
+        if (e.pointerId !== primaryId) return; // fingers travel together; count one
+        if (pointers.size >= 2) {
+          // Two-finger drag scrolls, touch-style: content follows the fingers.
+          pendingScroll += dy / SCROLL_PX_PER_NOTCH;
+        } else {
+          pendingDX += dx;
+          pendingDY += dy;
+        }
         pump();
       });
 
-      function endDrag(e) {
-        if (!dragging) return;
-        dragging = false;
+      function dropPointer(e) {
+        if (!pointers.delete(e.pointerId)) return false;
+        if (pointers.size > 0) {
+          // Hand the lead to a remaining finger so motion keeps flowing.
+          if (e.pointerId === primaryId) primaryId = pointers.keys().next().value;
+          return false;
+        }
+        primaryId = null;
         trackpad.classList.remove("active");
         pump();
+        return true; // gesture over
+      }
 
-        if (Math.hypot(totalDX, totalDY) > CLICK_MOVE_THRESHOLD) return;
+      function endGesture(e) {
+        if (!dropPointer(e)) return;
+        const fingers = gestureFingers;
+        gestureFingers = 0;
 
-        if (e.button === 2) {
+        // Looser tap test for multi-finger taps: each finger wobbles a little.
+        if (Math.hypot(totalDX, totalDY) > CLICK_MOVE_THRESHOLD * fingers) return;
+
+        // Touch has no right button, so a two-finger tap fills in for it.
+        if (e.button === 2 || fingers === 2) {
           enqueue("mouse=RIGHT_CLICK(0,0)");
           return;
         }
+        if (fingers > 2) return; // 3+ finger tap has no meaning here
 
         if (pendingClickTimer) {
           clearTimeout(pendingClickTimer);
@@ -472,8 +663,38 @@
         }
       }
 
-      trackpad.addEventListener("pointerup", endDrag);
-      trackpad.addEventListener("pointercancel", endDrag);
+      // A cancelled gesture (the system took over the touch, e.g. an edge
+      // swipe) must not turn into a click.
+      function cancelGesture(e) {
+        if (dropPointer(e)) gestureFingers = 0;
+      }
+
+      trackpad.addEventListener("pointerup", endGesture);
+      trackpad.addEventListener("pointercancel", cancelGesture);
+
+      // Physical mouse wheel / desktop trackpad scrolling over the pad.
+      trackpad.addEventListener(
+        "wheel",
+        (e) => {
+          e.preventDefault(); // the page itself has nowhere to scroll
+          // deltaMode 1 is lines (~3 per wheel notch); pixels (~100) otherwise.
+          pendingScroll -= e.deltaMode === 1 ? e.deltaY / 3 : e.deltaY / 100;
+          pump();
+        },
+        { passive: false },
+      );
+
+      // The CSS dvh cap doesn't account for the soft keyboard (dvh ignores
+      // it); the visual viewport does, so track it to keep the whole pad
+      // reachable above the keyboard while mirroring.
+      if (window.visualViewport) {
+        const fitTrackpad = () => {
+          // 100 matches the trackpad's --chrome: input row plus page padding.
+          trackpad.style.maxHeight = Math.max(120, window.visualViewport.height - 100) + "px";
+        };
+        window.visualViewport.addEventListener("resize", fitTrackpad);
+        fitTrackpad();
+      }
     </script>
   </body>
 </html>
