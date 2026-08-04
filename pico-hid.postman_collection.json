@@ -201,6 +201,58 @@
 						},
 						"description": "Move the cursor by the relative offset (x,y). Coordinates are relative to the current position and may be negative."
 					}
+				},
+				{
+					"name": "Press (start drag)",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "text/plain"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "mouse=PRESS(0,0)"
+						},
+						"url": {
+							"raw": "{{baseUrl}}/",
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								""
+							]
+						},
+						"description": "Move by the given relative offset (x,y) then hold the left button down. It stays held until a RELEASE; MOVEs sent in between drag with the button held."
+					}
+				},
+				{
+					"name": "Release (end drag)",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "text/plain"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "mouse=RELEASE(0,0)"
+						},
+						"url": {
+							"raw": "{{baseUrl}}/",
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								""
+							]
+						},
+						"description": "Move by the given relative offset (x,y) then let the left button go, ending a drag started with PRESS."
+					}
 				}
 			]
 		},

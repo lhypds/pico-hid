@@ -539,6 +539,12 @@
       let totalDX = 0,
         totalDY = 0;
       let pendingClickTimer = null;
+      // Double-tap-and-hold drags: the second touch of a double-tap presses
+      // the button the moment it lands, so the grab happens at the
+      // double-click point. Motion then drags; lifting lets go. A quick lift
+      // in place completes a double-click instead (see endGesture).
+      let dragging = false; // the board is holding the button; motion now drags
+      let pressedAt = 0; // when the drag press went down, to tell tap from hold
 
       trackpad.addEventListener("pointerdown", (e) => {
         // Don't steal focus: mid-mirroring, a tap here would otherwise blur
@@ -554,12 +560,30 @@
           totalDY = 0;
           pendingDX = 0;
           pendingDY = 0;
+          // A touch inside the double-click window is the second half of a
+          // double-tap: claim the pending single click and press right away,
+          // so the grab happens at the double-click point — waiting for
+          // movement instead loses the start of a fast drag to the slop test.
+          if (pendingClickTimer && e.button === 0) {
+            clearTimeout(pendingClickTimer);
+            pendingClickTimer = null;
+            dragging = true;
+            pressedAt = performance.now();
+            enqueue("mouse=PRESS(0,0)");
+          }
         } else {
           // A second finger turns the gesture into a scroll (or two-finger
           // tap): the first finger's accumulated movement is no longer a
           // pointer move.
           pendingDX = 0;
           pendingDY = 0;
+          // Fingers landing one-by-one right after a tap are that scroll,
+          // not a drag: let the still-unmoved button go. The press+release
+          // pair amounts to the single click the claimed tap was owed.
+          if (dragging && Math.hypot(totalDX, totalDY) <= CLICK_MOVE_THRESHOLD) {
+            dragging = false;
+            enqueue("mouse=RELEASE(0,0)");
+          }
         }
       });
 
@@ -573,9 +597,16 @@
         totalDX += dx;
         totalDY += dy;
         if (e.pointerId !== primaryId) return; // fingers travel together; count one
-        if (pointers.size >= 2) {
+        if (pointers.size >= 2 && !dragging) {
           // Two-finger drag scrolls, touch-style: content follows the fingers.
           pendingScroll += dy / SCROLL_PX_PER_NOTCH;
+        } else if (dragging && Math.hypot(totalDX, totalDY) <= CLICK_MOVE_THRESHOLD) {
+          // Wobble under a still-unmoved press is held back: this may yet
+          // end as a double-click, which the host voids if the pointer
+          // strays between the clicks. Only sub-slop wobble is ever
+          // swallowed — the event that passes the slop flows through below
+          // whole, so a fast drag loses none of its motion.
+          return;
         } else {
           pendingDX += dx;
           pendingDY += dy;
@@ -601,6 +632,31 @@
         const fingers = gestureFingers;
         gestureFingers = 0;
 
+        if (dragging) {
+          dragging = false;
+          const quickTap = performance.now() - pressedAt < DOUBLE_CLICK_WINDOW_MS;
+          if (quickTap && Math.hypot(totalDX, totalDY) <= CLICK_MOVE_THRESHOLD) {
+            // A quick lift in place: it was a double-tap after all. The
+            // button is still down — DOUBLE_CLICK's two press/release pairs
+            // land as up, down, up on the host (pressing a held button is a
+            // no-op), completing the double-click with both downs well
+            // inside the host's double-click time.
+            enqueue("mouse=DOUBLE_CLICK(0,0)");
+          } else {
+            // A drag (or a deliberate press-and-hold, released as just the
+            // one click). Flush motion still coalesced, so the drop lands
+            // where the finger stopped instead of the last few pixels
+            // applying after the button is already up.
+            const dx = Math.round(pendingDX);
+            const dy = Math.round(pendingDY);
+            pendingDX = 0;
+            pendingDY = 0;
+            if (dx !== 0 || dy !== 0) enqueue(`mouse=MOVE(${dx},${dy})`);
+            enqueue("mouse=RELEASE(0,0)");
+          }
+          return;
+        }
+
         // Looser tap test for multi-finger taps: each finger wobbles a little.
         if (Math.hypot(totalDX, totalDY) > CLICK_MOVE_THRESHOLD * fingers) return;
 
@@ -611,22 +667,22 @@
         }
         if (fingers > 2) return; // 3+ finger tap has no meaning here
 
-        if (pendingClickTimer) {
-          clearTimeout(pendingClickTimer);
+        pendingClickTimer = setTimeout(() => {
           pendingClickTimer = null;
-          enqueue("mouse=DOUBLE_CLICK(0,0)");
-        } else {
-          pendingClickTimer = setTimeout(() => {
-            pendingClickTimer = null;
-            enqueue("mouse=CLICK(0,0)");
-          }, DOUBLE_CLICK_WINDOW_MS);
-        }
+          enqueue("mouse=CLICK(0,0)");
+        }, DOUBLE_CLICK_WINDOW_MS);
       }
 
       // A cancelled gesture (the system took over the touch, e.g. an edge
-      // swipe) must not turn into a click.
+      // swipe) must not turn into a click — but a held button must still be
+      // let go, or it stays stuck down on the target machine.
       function cancelGesture(e) {
-        if (dropPointer(e)) gestureFingers = 0;
+        if (!dropPointer(e)) return;
+        gestureFingers = 0;
+        if (dragging) {
+          dragging = false;
+          enqueue("mouse=RELEASE(0,0)");
+        }
       }
 
       trackpad.addEventListener("pointerup", endGesture);

@@ -31,6 +31,15 @@ Setup
 
 4. Run `./reboot.sh` to reboot the board.
 
+Later uploads don't need `reboot.sh`: saving files onto the board triggers
+CircuitPython's auto-reload. That reload is a *soft* one, and on the Pico W it
+leaves the WiFi radio wedged — every reconnect fails with `Unknown failure 1`
+until a hard reset. `code.py` detects that state and hard-resets the board
+itself to recover, so right after an upload expect the CIRCUITPY drive to
+disconnect and remount once (macOS shows a "Disk Not Ejected Properly"
+warning — harmless here) and a `screen.sh` console to drop and need
+reopening. The board is back on WiFi a few seconds later.
+
 
 Monitoring
 ----------
@@ -89,6 +98,11 @@ Mouse event support:
    `MOVE(x,y)`  
 3. Scroll  
    `SCROLL(0,n)` — turn the wheel `n` notches; positive scrolls up.  
+4. Drag  
+   `PRESS(x,y)` holds the left button down, `RELEASE(x,y)` lets it go.  
+   `MOVE`s sent in between drag with the button held.  
+   `DOUBLE_CLICK` sent while the button is held lands as up-down-up,  
+   completing the held press into a double-click.  
 Note: the `x` and `y` is relative coordinate.  
 
 * De-duplication (optional)
@@ -128,7 +142,10 @@ double-click do the obvious thing, dragging moves the cursor, and the scroll
 wheel scrolls the target machine.
 
 The page works from a phone or tablet too: tap to click, two-finger tap for a
-right click, two-finger drag to scroll.
+right click, two-finger drag to scroll. Tap and immediately touch again to
+press the button right there — the grab happens at the double-click point, and
+moving then drags until the finger lifts. A quick lift in place is a
+double-click; holding before lifting makes it a plain press-and-release.
 
 
 Keyboard Mirroring Mode

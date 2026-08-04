@@ -12,6 +12,7 @@ import wifi
 import socketpool
 import mdns
 import microcontroller
+import supervisor
 
 print(sys.version)
 
@@ -107,18 +108,33 @@ except Exception as e:
 
 print("Connecting to WiFi: " + wifi_ssid + "...")
 
+# After a soft reload (auto-reload on file save, or Ctrl-D) the CYW43 radio
+# comes up wedged: every connect raises "Unknown failure 1", and neither
+# toggling wifi.radio.enabled nor resetting power management recovers it.
+# Only a hard reset does. So on a reload-run a single failed attempt is
+# already conclusive — recover with microcontroller.reset() below. That run
+# is then a fresh STARTUP, which keeps a genuinely dead network from
+# reset-looping forever.
+is_fresh_boot = supervisor.runtime.run_reason is supervisor.RunReason.STARTUP
+max_attempts = 5 if is_fresh_boot else 1
+
 connected = False
-for attempt in range(1, 6):
+for attempt in range(1, max_attempts + 1):
     try:
         wifi.radio.connect(wifi_ssid, wifi_password)
         print("Connected to WiFi")
         connected = True
         break
     except Exception as e:
-        print(f"Failed to connect to WiFi (Attempt {attempt}/5): {e}")
-        time.sleep(5)
+        print(f"Failed to connect to WiFi (Attempt {attempt}/{max_attempts}): {e}")
+        if attempt < max_attempts:
+            time.sleep(5)
 
 if not connected:
+    if not is_fresh_boot:
+        print("WiFi radio wedged by the soft reload -- hard-resetting to recover")
+        time.sleep(1)  # let the message reach the serial console before USB drops
+        microcontroller.reset()
     message = "Could not connect to WiFi after several attempts."
     print(message)
     write_error_file(message)
@@ -436,19 +452,29 @@ while True:
             elif body.startswith("mouse="):
                 action, x, y = parse_mouse(body.split("=", 1)[1].strip())
                 print(f"Mouse event: {action} ({x},{y})")
+                # The pre-click sleep lets the host settle after a real move;
+                # clicking in place (0,0) — all the web UI ever sends — skips
+                # it, so a click lands the moment the command arrives.
                 if action == "CLICK":
-                    mouse.move(x, y)
-                    time.sleep(wt)
+                    if x or y:
+                        mouse.move(x, y)
+                        time.sleep(wt)
                     mouse.click(Mouse.LEFT_BUTTON)
                     time.sleep(wt)
                 elif action == "RIGHT_CLICK":
-                    mouse.move(x, y)
-                    time.sleep(wt)
+                    if x or y:
+                        mouse.move(x, y)
+                        time.sleep(wt)
                     mouse.click(Mouse.RIGHT_BUTTON)
                     time.sleep(wt)
                 elif action == "DOUBLE_CLICK":
-                    mouse.move(x, y)
-                    time.sleep(wt)
+                    # While the left button is held (a PRESS the web UI ends
+                    # with a quick in-place lift), pressing again is a no-op,
+                    # so this lands as up, down, up — completing the held
+                    # press into a double-click with tight timing.
+                    if x or y:
+                        mouse.move(x, y)
+                        time.sleep(wt)
                     mouse.click(Mouse.LEFT_BUTTON)
                     mouse.click(Mouse.LEFT_BUTTON)
                     time.sleep(wt)
@@ -456,6 +482,15 @@ while True:
                     # No trailing sleep: the web UI's trackpad drag sends many
                     # of these in a row, so latency here is directly felt.
                     mouse.move(x, y)
+                elif action == "PRESS":
+                    # Hold the left button down until RELEASE; MOVEs in
+                    # between become a drag. No sleeps: these bracket a
+                    # stream of MOVEs, and USB HID keeps events ordered.
+                    mouse.move(x, y)
+                    mouse.press(Mouse.LEFT_BUTTON)
+                elif action == "RELEASE":
+                    mouse.move(x, y)
+                    mouse.release(Mouse.LEFT_BUTTON)
                 elif action == "SCROLL":
                     # Wheel notches in y; positive scrolls up. Coalesced
                     # client-side like MOVE, so no trailing sleep either.
