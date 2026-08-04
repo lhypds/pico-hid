@@ -12,4 +12,4 @@ RPI-RP2  -> Pico W
 https://circuitpython.org/board/raspberry_pi_pico_w/
 
 RP2350   -> Pico 2 W
-https://circuitpython.org/board/raspberry_pi_pico2/
+https://circuitpython.org/board/raspberry_pi_pico2_w/

@@ -27,7 +27,12 @@ fi
 if command -v lsof >/dev/null 2>&1; then
     HOLDER_PIDS=$(lsof -t -- "$PORT" 2>/dev/null || true)
     if [ -n "$HOLDER_PIDS" ]; then
-        echo "$PORT is still busy — held open by PID(s): $(echo "$HOLDER_PIDS" | tr '\n' ' ')" >&2
+        echo "$PORT is still busy — held open by:" >&2
+        for pid in $HOLDER_PIDS; do
+            echo "  PID $pid: $(ps -p "$pid" -o comm= 2>/dev/null || echo "unknown")" >&2
+        done
+        echo "Quit or disconnect that program (e.g. Thonny stays connected to the" >&2
+        echo "board the whole time it's open), then re-run this script." >&2
         exit 1
     fi
 fi
