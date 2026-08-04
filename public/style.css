@@ -15,9 +15,7 @@
 }
 
 html {
-  background-color: #fafafa;
-  background-image: radial-gradient(circle, #d2d2d2 1px, transparent 1px);
-  background-size: 20px 20px;
+  background-color: #fff;
 }
 
 body {
