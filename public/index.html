@@ -130,7 +130,14 @@
       // Resolves true/false instead of rejecting, so a failure can be retried
       // and can't surface as an unhandled rejection that stalls the pump.
       function sendCommand(body) {
-        return fetch("/", { method: "POST", body }).then(
+        return fetch("/", {
+          method: "POST",
+          body,
+          // Let the request outlive the page. A shortcut the browser insists on
+          // acting on (Cmd+W, Ctrl+W) tears the tab down mid-request, and
+          // without this the keystroke dies before reaching the board.
+          keepalive: true,
+        }).then(
           () => true,
           () => false,
         );
@@ -330,25 +337,19 @@
         enqueue("keycode=" + mods.concat(name).join("+"));
       }
 
-      // Browser-level shortcuts (Cmd+W, Cmd+T, Cmd+N, Cmd+Tab) are claimed by
-      // the browser before the page sees them, so preventDefault can't stop
-      // them. Two best-effort mitigations:
-      //  - Keyboard Lock hands those keys to the page instead, but it needs a
-      //    secure context plus fullscreen. The board serves plain HTTP, so it
-      //    only engages when the page is reached over HTTPS or via localhost —
-      //    hence the check, so HTTP users don't get pointless fullscreen.
-      //  - beforeunload turns an unstoppable Cmd+W into a confirm dialog rather
-      //    than an instantly closed tab.
+      // Browser-level shortcuts (Cmd+W, Cmd+R, Cmd+T, Cmd+Tab) are claimed by the
+      // browser before the page sees them, so preventDefault can't stop them.
+      // Keyboard Lock is the only thing that can, and it needs a secure context
+      // plus fullscreen — so it engages over HTTPS or localhost but not on the
+      // board's plain-HTTP page, hence the check rather than forcing fullscreen
+      // on HTTP users for no benefit. There deliberately is no beforeunload
+      // guard: it would prompt on every reload too, which is more annoying than
+      // the accidental close it protects against. The keystroke still reaches
+      // the board either way, because sendCommand uses keepalive.
       const canLockKeys = !!(navigator.keyboard && navigator.keyboard.lock);
       let tookFullscreen = false;
 
-      function warnBeforeUnload(e) {
-        e.preventDefault();
-        e.returnValue = "";
-      }
-
       async function captureKeys() {
-        window.addEventListener("beforeunload", warnBeforeUnload);
         if (!canLockKeys) return;
         try {
           if (!document.fullscreenElement) {
@@ -362,7 +363,6 @@
       }
 
       function releaseKeys() {
-        window.removeEventListener("beforeunload", warnBeforeUnload);
         if (canLockKeys) {
           try {
             navigator.keyboard.unlock();

@@ -104,19 +104,41 @@ Open the board's address in a browser (e.g. `http://ph-3f9a.local`). The page is
 `public/index.html` — one self-contained file, no build step, CSS and JS inlined so
 the board serves it in a single request.
 
-* Text field — sends what you type via `typing=`.
-* Trackpad — click, right-click and double-click do the obvious thing; dragging
-  moves the cursor.
-* Keyboard button (right of send) — toggles **mirror mode**, where every key you
-  press is forwarded as a `keycode=` chord. The filled button is the live one, and
-  the text field becomes a read-only display of the last key. Click either button
-  to leave.
+The two buttons right of the text field pick the mode; the filled one is live.
 
-Mirror mode sends the physical key, so the target machine applies its own layout,
-and it swallows keys locally — so exit by clicking, not by pressing Escape.
-`Cmd+W`/`Cmd+T`/`Cmd+Tab` are claimed by the browser before the page sees them and
-can't be suppressed over plain HTTP; a `beforeunload` prompt guards against
-accidentally closing the tab.
+
+Text Sending Mode
+
+The default. Type in the text field and press Enter or click ↵ to send it as
+`typing=`. Below that, the trackpad handles the mouse: click, right-click and
+double-click do the obvious thing, and dragging moves the cursor.
+
+
+Keyboard Mirroring Mode
+
+Click the keyboard button to enter it. Every key you press is then forwarded to the
+target machine as a `keycode=` chord, modifiers included, and the text field turns
+into a read-only display of the last key in macOS notation (`^C`, `⇧⌘A`, `⌘⌫`).
+Click either button to go back to send mode.
+
+It forwards the *physical* key rather than the character it produced, so the target
+machine applies its own keyboard layout. Keys are swallowed locally, so leave by
+clicking — pressing Escape sends Escape to the target. Auto-repeat from a held key
+is ignored, to avoid flooding the board.
+
+**Limitation: shortcuts the browser reserves can't be intercepted.** `Cmd+W`
+(close tab), `Cmd+R`, `Cmd+T`, `Cmd+N`, `Cmd+Q` and `Cmd+Tab` are handled by the
+browser and the OS before the page is consulted, and `preventDefault()` on them is
+ignored — a deliberate security boundary, so no page-level fix exists. They are
+forwarded to the target machine *and* still act on your browser, so `Cmd+W` closes
+your tab as well. Two ways around it:
+
+* Reach the page from a secure context — over HTTPS, or `localhost` via an SSH
+  tunnel. The page then uses the Keyboard Lock API (plus fullscreen) and captures
+  those keys properly. It engages automatically when available; over plain HTTP it
+  stays off rather than forcing fullscreen for no benefit.
+* Send the combination as an API call instead, e.g. `keycode=GUI+w`. A request
+  isn't a keystroke, so nothing intercepts it.
 
 
 Macro
