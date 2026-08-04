@@ -174,7 +174,7 @@ your tab as well. Two ways around it:
 Virtual Keyboard
 ----------------
 
-`client/keyboard.go` is a desktop window holding a full-size keyboard with a
+`keyboard/` is a desktop window holding a full-size keyboard with a
 square trackpad beside it, for driving the board from a computer instead of a
 browser. The window is only those two things; everything else is behind
 `Settings…` in the menu bar.
@@ -183,13 +183,13 @@ Run `./keyboard.sh`. It sets the Go module up the first time, builds the app and
 starts it, and passes any arguments through — so `./keyboard.sh -url
 http://ph-1234.local` works.  
 
-To set the directory up by hand instead, `cd client` and:
+To set it up by hand instead, `cd keyboard` and:
 
-`go mod init pico-hid`  
+`go mod init pico-hid-keyboard`  
 `go get fyne.io/fyne/v2 github.com/joho/godotenv`  
 `go mod tidy`  
 
-then `go run keyboard.go`.  
+then `go run .`.  
 The GUI is drawn through OpenGL, so building it needs a C compiler — on macOS
 that means the Xcode command line tools.  
 
@@ -198,8 +198,8 @@ between runs. The board is asked for as `http://ph-` **id** `.local`, because
 only the id varies: it is four hex digits of the board's CPU id, which it prints
 on boot and writes to `hostname.txt` on the CIRCUITPY drive. A whole address
 pasted into the field is reduced to the id, so that works too. `-url` or
-`PICO_HID_SERVER_URL` in `client/.env` — the same file the macro client reads —
-can name any host instead, an IP included. With nothing set yet the window opens
+`PICO_HID_SERVER_URL` in `keyboard/.env` — read the way the macro client reads
+its own — can name any host instead, an IP included. With nothing set yet the window opens
 the settings straight away.  
 
 Nothing else is on screen, and there is no status display at all: a command that
@@ -262,10 +262,13 @@ Macro
 There is a client example code (`client/client_example.go`) written in Go language.  
 You can add your own code in `main()`.  
 
-It shares the `client` directory with the desktop app, so it sits behind a build
-tag to keep the two commands apart. Set the directory up as described above.  
+It is a Go module of its own, separate from the desktop app. To use it,
+`cd client` first, then set it up with:
+
+`go mod init pico-hid`  
+`go get github.com/joho/godotenv`  
 
 Copy `.env.example` to `.env` and add the server URL as,  
 `PICO_HID_SERVER_URL=your_server_url`  
 
-Run it with `go run -tags example client_example.go`.  
+Run it with `go run client_example.go`.  

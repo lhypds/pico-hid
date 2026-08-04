@@ -1,9 +1,3 @@
-//go:build example
-
-// This example and keyboard.go are both commands in one directory, so the
-// example sits behind a build tag to keep the two from colliding:
-//
-//	go run -tags example client_example.go
 package main
 
 import (

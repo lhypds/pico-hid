@@ -4,7 +4,7 @@ settings.toml
 .env
 go.mod
 go.sum
-client/Pico HID Keyboard
+keyboard/Pico HID Keyboard
 upload-to-board/
 
 # for macOS

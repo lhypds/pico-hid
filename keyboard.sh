@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-cd "$(dirname "$0")/client"
+cd "$(dirname "$0")/keyboard"
 
 # The binary is built rather than `go run`, and named the way the app should
 # read: on macOS the menu bar takes the application name from the running
@@ -19,7 +19,7 @@ fi
 # the first run instead of leaving everyone to follow the README by hand.
 if [ ! -f go.mod ]; then
     echo "Setting up the Go module (first run only)..."
-    go mod init pico-hid
+    go mod init pico-hid-keyboard
 fi
 
 # go list resolves the imports without compiling, so this is a cheap way to ask
