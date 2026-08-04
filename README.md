@@ -87,15 +87,18 @@ Web UI
 ------
 
 Visiting the board's address in a browser (e.g. `http://ph-3f9a.local`) serves a
-small control page from the `public/` folder (`index.html`, `style.css`, `app.js`):
+small control page from `public/index.html`:
 
 * A text field — sends whatever you type via `typing=`.
 * A square trackpad area — click for a left click, right-click for a right click,
   double-click for a double click, and dragging moves the cursor (translated into
   relative `mouse=MOVE(dx,dy)` calls).
 
-It's plain HTML/CSS/JS with no build step, so editing it is just editing those three
-files directly; `upload.sh` copies the `public/` folder to the board like everything else.
+Its CSS and JS are inlined into that single file, so loading the UI costs the board
+one request instead of one per asset — it serves connections one at a time, and the
+extra round trips were failing under load. Plain HTML/CSS/JS with no build step, so
+editing it is just editing that file; `upload.sh` copies `public/` to the board like
+everything else.
 
 
 Macro

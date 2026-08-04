@@ -1,30 +1,230 @@
-<!DOCTYPE html>
+<!doctype html>
 <html lang="en">
-<head>
-<meta charset="UTF-8" />
-<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1" />
-<title>pico-hid</title>
-<link rel="stylesheet" href="/style.css" />
-</head>
-<body>
-<main class="container">
-  <h1>pico-hid</h1>
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1" />
+    <title>pico-hid</title>
+    <link rel="icon" href="data:," />
+    <style>
+      :root {
+        --ink: #111;
+        --line: #e2e2e2;
+        --soft: #f5f5f5;
+        --bg: #fff;
+        --font-sans: -apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, Arial, sans-serif;
+      }
 
-  <section class="panel">
-    <label for="text-input">Send text</label>
-    <div class="row">
-      <input id="text-input" type="text" placeholder="Type here and press Enter..." autocomplete="off" autocapitalize="off" spellcheck="false" />
-      <button id="send-btn" type="button">Send</button>
-    </div>
-  </section>
+      * {
+        box-sizing: border-box;
+      }
 
-  <section class="panel">
-    <label>Trackpad</label>
-    <div id="trackpad"></div>
-  </section>
+      html {
+        background-color: #fff;
+      }
 
-  <p id="status" class="status"></p>
-</main>
-<script src="/app.js"></script>
-</body>
+      body {
+        margin: 0;
+        font-family: var(--font-sans);
+        color: var(--ink);
+        display: flex;
+        justify-content: center;
+        padding: 24px 16px;
+        -webkit-font-smoothing: antialiased;
+      }
+
+      .container {
+        width: 100%;
+        max-width: 630px;
+        display: flex;
+        flex-direction: column;
+        gap: 20px;
+      }
+
+      .row {
+        display: flex;
+      }
+
+      input#text-input {
+        flex: 1;
+        min-width: 0;
+        padding: 10px 12px;
+        border: 1px solid var(--ink);
+        border-right: none;
+        background: var(--bg);
+        color: var(--ink);
+        font: inherit;
+        font-size: 1rem;
+        outline: none;
+      }
+
+      button {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        padding: 10px 16px;
+        border: 1px solid var(--ink);
+        background: var(--ink);
+        color: var(--bg);
+        font-size: 1rem;
+        font-family: inherit;
+        cursor: pointer;
+      }
+
+      button:hover {
+        opacity: 0.85;
+      }
+
+      button:active {
+        opacity: 0.7;
+      }
+
+      #trackpad {
+        width: 100%;
+        aspect-ratio: 1 / 1;
+        background: var(--soft);
+        border: 1px solid var(--ink);
+        touch-action: none;
+        user-select: none;
+        -webkit-user-select: none;
+      }
+
+      #trackpad.active {
+        background: var(--line);
+      }
+    </style>
+  </head>
+  <body>
+    <main class="container">
+      <section>
+        <div class="row">
+          <input id="text-input" type="text" autocomplete="off" autocapitalize="off" spellcheck="false" />
+          <button id="send-btn" type="button" aria-label="Send">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <polyline points="9 10 4 15 9 20" />
+              <path d="M20 4v7a4 4 0 0 1-4 4H4" />
+            </svg>
+          </button>
+        </div>
+      </section>
+
+      <section>
+        <div id="trackpad"></div>
+      </section>
+    </main>
+    <script>
+      // Failures are swallowed on purpose: these are fire-and-forget HID
+      // commands, and an unhandled rejection would stall the drag pump below.
+      function sendCommand(body) {
+        return fetch("/", { method: "POST", body }).catch(() => {});
+      }
+
+      // --- Text input ---
+      const textInput = document.getElementById("text-input");
+      const sendBtn = document.getElementById("send-btn");
+
+      function sendText() {
+        const text = textInput.value;
+        if (!text) return;
+        sendCommand("typing=" + text);
+        textInput.value = "";
+        textInput.focus();
+      }
+
+      sendBtn.addEventListener("click", sendText);
+      textInput.addEventListener("keydown", (e) => {
+        if (e.key === "Enter") sendText();
+      });
+
+      // --- Trackpad ---
+      const trackpad = document.getElementById("trackpad");
+      trackpad.addEventListener("contextmenu", (e) => e.preventDefault());
+
+      const CLICK_MOVE_THRESHOLD = 6; // px of total movement below which a gesture counts as a click, not a drag
+      const DOUBLE_CLICK_WINDOW_MS = 300;
+
+      let dragging = false;
+      let lastX = 0;
+      let lastY = 0;
+      let totalDX = 0;
+      let totalDY = 0;
+      let pendingDX = 0;
+      let pendingDY = 0;
+      let moveInFlight = false;
+      let pendingClickTimer = null;
+
+      // Keeps at most one MOVE request in flight, accumulating movement into
+      // the next one while it's outstanding. The board handles connections
+      // one at a time, so a fixed send interval either outruns it (requests
+      // pile up and fail) or lags it; this paces itself to whatever the board
+      // can actually keep up with, and coalesces a fast drag into fewer,
+      // larger deltas instead of many tiny ones.
+      function flushMove() {
+        if (moveInFlight) return;
+        const dx = Math.round(pendingDX);
+        const dy = Math.round(pendingDY);
+        if (dx === 0 && dy === 0) return;
+        pendingDX -= dx;
+        pendingDY -= dy;
+        moveInFlight = true;
+        sendCommand(`mouse=MOVE(${dx},${dy})`).finally(() => {
+          moveInFlight = false;
+          flushMove(); // send whatever accumulated while this was in flight
+        });
+      }
+
+      trackpad.addEventListener("pointerdown", (e) => {
+        trackpad.setPointerCapture(e.pointerId);
+        trackpad.classList.add("active");
+        dragging = true;
+        lastX = e.clientX;
+        lastY = e.clientY;
+        totalDX = 0;
+        totalDY = 0;
+        pendingDX = 0;
+        pendingDY = 0;
+      });
+
+      trackpad.addEventListener("pointermove", (e) => {
+        if (!dragging) return;
+        const dx = e.clientX - lastX;
+        const dy = e.clientY - lastY;
+        lastX = e.clientX;
+        lastY = e.clientY;
+        totalDX += dx;
+        totalDY += dy;
+        pendingDX += dx;
+        pendingDY += dy;
+        flushMove();
+      });
+
+      function endDrag(e) {
+        if (!dragging) return;
+        dragging = false;
+        trackpad.classList.remove("active");
+        flushMove();
+
+        const moved = Math.hypot(totalDX, totalDY) > CLICK_MOVE_THRESHOLD;
+        if (moved) return;
+
+        if (e.button === 2) {
+          sendCommand("mouse=RIGHT_CLICK(0,0)");
+          return;
+        }
+
+        if (pendingClickTimer) {
+          clearTimeout(pendingClickTimer);
+          pendingClickTimer = null;
+          sendCommand("mouse=DOUBLE_CLICK(0,0)");
+        } else {
+          pendingClickTimer = setTimeout(() => {
+            pendingClickTimer = null;
+            sendCommand("mouse=CLICK(0,0)");
+          }, DOUBLE_CLICK_WINDOW_MS);
+        }
+      }
+
+      trackpad.addEventListener("pointerup", endDrag);
+      trackpad.addEventListener("pointercancel", endDrag);
+    </script>
+  </body>
 </html>

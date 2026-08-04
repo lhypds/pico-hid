@@ -273,11 +273,11 @@ print(f"Auto movement: {'enabled' if auto_move_enabled else 'disabled'}")
 print(f"Interval: {mouse_move_interval}s")
 
 # Static files for the browser-based control UI, served on GET requests.
+# One self-contained page — its CSS and JS are inlined — so loading the UI
+# costs a single request instead of one per asset.
 STATIC_FILES = {
     "/": ("public/index.html", "text/html"),
     "/index.html": ("public/index.html", "text/html"),
-    "/style.css": ("public/style.css", "text/css"),
-    "/app.js": ("public/app.js", "application/javascript"),
 }
 
 
