@@ -127,6 +127,19 @@
       let pendingDX = 0; // pointer movement, coalesced rather than queued
       let pendingDY = 0;
 
+      // Delivery is at-least-once: a retry can re-send a command the board
+      // already ran (when the response was lost, not the request). So every
+      // command carries a unique seq token, stamped once per command and
+      // reused on retry, and the board skips a token it just handled. The
+      // random prefix keeps tokens unique across page reloads and tabs.
+      const SEQ_PREFIX = Math.random().toString(36).slice(2, 7);
+      let seqCounter = 0;
+
+      function stampSeq(body) {
+        seqCounter += 1;
+        return "seq=" + SEQ_PREFIX + "-" + seqCounter + "&" + body;
+      }
+
       // Resolves true/false instead of rejecting, so a failure can be retried
       // and can't surface as an unhandled rejection that stalls the pump.
       function sendCommand(body) {
@@ -144,7 +157,7 @@
       }
 
       function enqueue(body) {
-        queue.push({ body, tries: 0, retry: true });
+        queue.push({ body: stampSeq(body), tries: 0, retry: true });
         pump();
       }
 
@@ -161,7 +174,7 @@
           if (dx === 0 && dy === 0) return;
           pendingDX -= dx;
           pendingDY -= dy;
-          item = { body: `mouse=MOVE(${dx},${dy})`, tries: 0, retry: false };
+          item = { body: stampSeq(`mouse=MOVE(${dx},${dy})`), tries: 0, retry: false };
         }
 
         inFlight = true;

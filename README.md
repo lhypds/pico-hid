@@ -89,6 +89,13 @@ Mouse event support:
    `MOVE(x,y)`  
 Note: the `x` and `y` is relative coordinate.  
 
+* De-duplication (optional)
+
+A command may carry a `seq=<token>&` prefix, e.g. `seq=k3f9-42&keycode=CTRL+c`.
+The board skips a command whose token matches the one it just executed, so a
+client that retries on a lost response (like the web UI) can't type a key
+twice. Commands without the prefix always execute.  
+
 
 Auto Movement
 -------------

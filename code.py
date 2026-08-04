@@ -419,6 +419,40 @@ def send_all(sock, data):
         sent += sock.send(view[sent:])
 
 
+def read_request(sock):
+    """Read one full HTTP request: headers plus Content-Length bytes of body.
+
+    A single recv can return just the first TCP segment. Closing the socket
+    while unread bytes remain turns the close into a RST, and on a RST the
+    browser discards our "200 OK" and reports a network error for a request
+    that actually ran — which the web UI answers with a retry, i.e. a
+    duplicated keystroke.
+    """
+    buffer = bytearray(2048)
+    request = b""
+    body_start = -1
+    content_length = 0
+    # 8KB cap so a malformed request can't grow the buffer unbounded.
+    while len(request) < 8192:
+        n = sock.recv_into(buffer)
+        if n == 0:  # client closed its end, nothing more is coming
+            break
+        request += bytes(buffer[:n])
+        if body_start < 0:
+            i = request.find(b"\r\n\r\n")
+            if i >= 0:
+                body_start = i + 4
+                for line in str(request[:i], "utf8").split("\r\n")[1:]:
+                    if line.lower().startswith("content-length:"):
+                        try:
+                            content_length = int(line[15:].strip())
+                        except ValueError:
+                            pass
+        if body_start >= 0 and len(request) - body_start >= content_length:
+            break
+    return str(request, "utf8")
+
+
 def send_response(sock, status, content_type, body):
     if isinstance(body, str):
         body = body.encode("utf8")
@@ -447,6 +481,11 @@ def serve_static(sock, path):
         send_response(sock, "500 Internal Server Error", "text/plain", "Internal Server Error")
 
 
+# Seq token of the most recently executed command. The web UI retries a
+# command when the response got lost, even though the request may have run —
+# a repeat of this token identifies such a retry so it isn't run twice.
+last_seq = None
+
 while True:
     current_time = time.monotonic()
     service_led()
@@ -461,9 +500,7 @@ while True:
         # here: a send() that trips it leaves the reply unsent.
         client_socket.settimeout(5)
 
-        buffer = bytearray(2048)
-        bytes_received = client_socket.recv_into(buffer)
-        request_str = str(buffer[:bytes_received], "utf8")
+        request_str = read_request(client_socket)
 
         request_line = request_str.split("\r\n", 1)[0]
         request_parts = request_line.split(" ")
@@ -486,10 +523,23 @@ while True:
             client_socket.close()
             client_socket = None
 
+            # Commands from the web UI carry a "seq=<token>&" prefix; commands
+            # sent without one (curl, the Go client) always execute.
+            duplicate = False
+            if body.startswith("seq="):
+                parts = body.split("&", 1)
+                seq = parts[0][4:]
+                body = parts[1] if len(parts) > 1 else ""
+                duplicate = seq == last_seq
+                last_seq = seq
+
+            if duplicate:
+                print(f"Duplicate command (seq {last_seq}), skipping")
+
             # Check if the request body starts with "keycode="
             # "," separates keys pressed one after another, "+" joins keys held
             # together as a chord: "CTRL+c" or "CTRL+c,CTRL+v".
-            if body.startswith("keycode="):
+            elif body.startswith("keycode="):
                 for chord in body.split("=", 1)[1].strip().split(","):
                     press_chord(chord)
 
