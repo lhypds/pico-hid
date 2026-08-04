@@ -1,15 +1,33 @@
+@import url(https://cdn.jsdelivr.net/npm/firacode@6.2.0/distr/fira_code.css);
+
+:root {
+  --ink: #111;
+  --muted: #767676;
+  --line: #e2e2e2;
+  --soft: #f5f5f5;
+  --bg: #fff;
+  --font-sans: -apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, Arial, sans-serif;
+  --font-title: "Fira Code VF", monospace;
+}
+
 * {
   box-sizing: border-box;
 }
 
+html {
+  background-color: #fafafa;
+  background-image: radial-gradient(circle, #d2d2d2 1px, transparent 1px);
+  background-size: 20px 20px;
+}
+
 body {
   margin: 0;
-  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
-  background: #101318;
-  color: #e8eaed;
+  font-family: var(--font-sans);
+  color: var(--ink);
   display: flex;
   justify-content: center;
   padding: 24px 16px;
+  -webkit-font-smoothing: antialiased;
 }
 
 .container {
@@ -21,7 +39,10 @@ body {
 }
 
 h1 {
-  font-size: 1.25rem;
+  font-family: var(--font-title);
+  font-size: 28px;
+  font-weight: 700;
+  letter-spacing: -0.5px;
   margin: 0;
   text-align: center;
 }
@@ -30,68 +51,68 @@ h1 {
   display: flex;
   flex-direction: column;
   gap: 8px;
+  background: var(--bg);
+  border: 1px solid var(--ink);
+  padding: 16px;
 }
 
 label {
-  font-size: 0.85rem;
-  color: #9aa0a6;
+  font-size: 0.8rem;
+  color: var(--muted);
 }
 
 .row {
   display: flex;
-  gap: 8px;
 }
 
 input#text-input {
   flex: 1;
+  min-width: 0;
   padding: 10px 12px;
-  border-radius: 8px;
-  border: 1px solid #3c4043;
-  background: #1b1e24;
-  color: #e8eaed;
+  border: 1px solid var(--ink);
+  border-right: none;
+  background: var(--bg);
+  color: var(--ink);
+  font: inherit;
   font-size: 1rem;
+  outline: none;
 }
 
 button {
   padding: 10px 16px;
-  border-radius: 8px;
-  border: none;
-  background: #4f7cff;
-  color: white;
+  border: 1px solid var(--ink);
+  background: var(--ink);
+  color: var(--bg);
   font-size: 1rem;
+  font-family: inherit;
   cursor: pointer;
 }
 
+button:hover {
+  opacity: 0.85;
+}
+
 button:active {
-  background: #3d63d1;
+  opacity: 0.7;
 }
 
 #trackpad {
   width: 100%;
   aspect-ratio: 1 / 1;
-  border-radius: 16px;
-  background: #1b1e24;
-  border: 1px solid #3c4043;
+  background: var(--soft);
+  border: 1px solid var(--ink);
   touch-action: none;
   user-select: none;
   -webkit-user-select: none;
 }
 
 #trackpad.active {
-  background: #22262e;
-  border-color: #4f7cff;
-}
-
-.hint {
-  font-size: 0.75rem;
-  color: #6b7076;
-  margin: 0;
-  line-height: 1.4;
+  background: var(--line);
 }
 
 .status {
   min-height: 1em;
   font-size: 0.8rem;
-  color: #6b7076;
+  color: var(--muted);
   text-align: center;
 }
