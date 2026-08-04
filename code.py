@@ -65,6 +65,18 @@ try:
 except Exception as e:
     print(f"Could not set WiFi hostname: {e}")
 
+# Disable the CYW43 WiFi chip's power-save mode. With it on (the default),
+# the chip naps after idle periods and stops answering network traffic —
+# the server works at first, then turns unreachable minutes later. Power
+# draw is a non-issue since the board runs off the target machine's USB.
+try:
+    import cyw43
+
+    cyw43.set_power_management(cyw43.PM_DISABLED)
+    print("WiFi power-save disabled")
+except Exception as e:
+    print(f"Could not disable WiFi power-save: {e}")
+
 print("Connecting to WiFi: " + wifi_ssid + "...")
 
 max_retries = 5
@@ -308,6 +320,7 @@ while True:
     current_time = time.monotonic()
 
     # Check for new connections
+    client_socket = None
     try:
         client_socket, client_address = server_socket.accept()
 
@@ -404,17 +417,22 @@ while True:
 
             send_response(client_socket, "200 OK", "text/plain", "OK")
 
-        client_socket.close()
-
     except Exception as e:
-        # Check if the error is related to timeout
-        if e.errno == 116:  # ETIMEDOUT error number for timeout
-            pass  # No connection in this iteration, continue to periodic task
+        # errno 116 (ETIMEDOUT) is just the accept() timeout — no connection
+        # this iteration. getattr because not every exception has an errno,
+        # and touching e.errno on one that doesn't would crash the server.
+        if getattr(e, "errno", None) == 116:
+            pass  # Continue to periodic task
         else:
             message = f"An unexpected error occurred: {e}"
             print(message)
             write_error_file(message)
-            response = "HTTP/1.1 500 Internal Server Error\r\nContent-Type: text/plain\r\n\r\nInternal Server Error"
+    finally:
+        # Always close the client socket, including on errors — each leaked
+        # socket is gone for good, and once the pool is exhausted the server
+        # stops accepting connections entirely.
+        if client_socket is not None:
+            client_socket.close()
 
     # Perform periodic mouse movement if no connections are being handled
     if auto_move_enabled and current_time - last_mouse_move_time >= mouse_move_interval:
