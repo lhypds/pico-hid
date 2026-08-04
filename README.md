@@ -31,6 +31,9 @@ Setup
    `lib/`, and your `settings.toml` — into `upload-to-board/`. Copy that folder's
    contents onto the `CIRCUITPY` drive.  
 
+Use `screen.sh` to open a serial console to the board.  
+You should see it booting and connecting to WiFi.  
+
 Re-power it (a full power-cycle, not a soft reload — `boot.py` only runs at hard reset).  
 Done.  
 
