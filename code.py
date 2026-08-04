@@ -126,9 +126,6 @@ except Exception as e:
     write_error_file(message)
     sys.exit(1)
 print(f"Listening on {HOST}:{PORT}")
-print(
-    "Please send request with raw text: typing=your_text_string or keycode=your_key or mouse=CLICK(x,y) or mouse=RIGHT_CLICK(x,y) or mouse=MOVE(x,y) or automove=START/STOP. Or open this device's IP in a browser for a simple control UI."
-)
 
 # Mapping of key names to Keycode values
 keycode_map = {
