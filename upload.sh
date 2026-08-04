@@ -12,6 +12,39 @@ cp code.py boot.py "$DEST"/
 cp -r lib "$DEST"/
 cp -r public "$DEST"/
 
+# Shrink the control UI in the staging copy only, so public/index.html stays
+# readable. Deliberately line-based: newlines survive, which keeps trailing
+# "//" comments and JavaScript's semicolon insertion valid. A smarter
+# minifier would save a few hundred more bytes and risk breaking the page.
+if command -v python3 >/dev/null 2>&1; then
+    python3 - "$DEST/public/index.html" <<'PY'
+import re
+import sys
+
+path = sys.argv[1]
+with open(path) as f:
+    source = f.read()
+
+stripped = re.sub(r"<!--[\s\S]*?-->", "", source)  # HTML comments
+stripped = re.sub(r"/\*[\s\S]*?\*/", "", stripped)  # CSS block comments
+
+lines = []
+for line in stripped.split("\n"):
+    line = line.strip()
+    if not line or line.startswith("//"):  # blank lines and JS comment lines
+        continue
+    lines.append(line)
+minified = "\n".join(lines) + "\n"
+
+with open(path, "w") as f:
+    f.write(minified)
+
+print(f"Minified index.html: {len(source)} -> {len(minified)} bytes")
+PY
+else
+    echo "python3 not found — shipping index.html unminified." >&2
+fi
+
 if [ -f settings.toml ]; then
     cp settings.toml "$DEST"/
 else
