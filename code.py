@@ -323,6 +323,10 @@ while True:
     client_socket = None
     try:
         client_socket, client_address = server_socket.accept()
+        # The accepted socket inherits the listener's 1s timeout, which is
+        # meant for polling accept(), not for talking to a client. Too short
+        # here: a send() that trips it leaves the reply unsent.
+        client_socket.settimeout(5)
 
         buffer = bytearray(2048)
         bytes_received = client_socket.recv_into(buffer)
@@ -339,6 +343,16 @@ while True:
         if method == "GET":
             serve_static(client_socket, path)
         else:
+            # Reply before running the command. HID actions are slow on
+            # purpose (each key/click holds for wt, and typing a long string
+            # takes seconds), and the caller doesn't need a result — so
+            # answering afterwards just leaves the client waiting, which
+            # surfaces in the browser as "Failed to fetch" even though the
+            # command ran fine.
+            send_response(client_socket, "200 OK", "text/plain", "OK")
+            client_socket.close()
+            client_socket = None
+
             # Check if the request body starts with "keycode="
             if body.startswith("keycode="):
                 keys = body.split("=", 1)[1].strip().split(",")
@@ -414,8 +428,6 @@ while True:
                     mouse.move(x, y)
                 else:
                     print(f"Invalid mouse action: {action}")
-
-            send_response(client_socket, "200 OK", "text/plain", "OK")
 
     except Exception as e:
         # errno 116 (ETIMEDOUT) is just the accept() timeout — no connection
