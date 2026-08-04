@@ -86,7 +86,7 @@ Send `automove=STOP` to stop it.
 Web UI
 ------
 
-Visiting the board's address in a browser (e.g. `http://pico-hid-3f9a.local`) serves a
+Visiting the board's address in a browser (e.g. `http://ph-3f9a.local`) serves a
 small control page from the `public/` folder (`index.html`, `style.css`, `app.js`):
 
 * A text field — sends whatever you type via `typing=`.
