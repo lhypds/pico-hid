@@ -1068,9 +1068,13 @@ func (r *keyboardPanelRenderer) Destroy()                     {}
 //
 // The gestures are the web UI's, from public/index.html: dragging moves the
 // pointer, click, right-click and double-click do the obvious thing, and the
-// wheel scrolls the target machine. Holding shift while dragging keeps the left
-// button down for the whole drag, which is how you drag something *on* the
-// target rather than just moving the pointer.
+// wheel scrolls the target machine. Click and then press again straight away to
+// drag on the target itself — the second press grabs and holds the button, so
+// motion after it drags whatever is under the pointer.
+//
+// The clicks are told apart here rather than by Fyne, which cannot say "a press
+// arrived inside the double-click window" — and that moment is exactly when the
+// button has to go down for a drag to start at the double-click point.
 // ---------------------------------------------------------------------------
 
 // Fyne scales raw wheel offsets by a per-platform constant before handing them
@@ -1087,6 +1091,11 @@ const (
 	maxSpeed = 4
 	// Just the four hex digits an id is, and no room for more.
 	boardIDWidth = 46
+	// How long a click waits to see whether a second one follows, and how far a
+	// gesture may wander and still count as being in one place. Both match the
+	// web UI, so the two clients feel the same.
+	doubleClickWindow = 300 * time.Millisecond
+	clickMoveSlop     = 6
 )
 
 type trackpad struct {
@@ -1095,8 +1104,12 @@ type trackpad struct {
 
 	sens float32 // pointer sensitivity multiplier
 
-	held      bool // the board is holding the button down for us
-	shiftDown bool // shift was down when this gesture began
+	// pending is a click waiting out the double-click window, in case a second
+	// press follows and turns the gesture into a double-click or a drag.
+	pending   *time.Timer
+	held      bool      // the board is holding the left button down for us
+	pressedAt time.Time // when that press went down, to tell a tap from a hold
+	dx, dy    float32   // how far this gesture has travelled, for the tap test
 	active    bool
 	hovered   bool
 }
@@ -1109,16 +1122,71 @@ func newTrackpad(snd *sender, sens float32) *trackpad {
 
 func (t *trackpad) MouseDown(e *desktop.MouseEvent) {
 	t.active = true
-	// A DragEvent carries no modifier state, so remember it from the press
-	// that starts the gesture.
-	t.shiftDown = e.Modifier&fyne.KeyModifierShift != 0
+	t.dx, t.dy = 0, 0
+	if e.Button == desktop.MouseButtonPrimary {
+		t.claimPendingClick()
+	}
 	t.Refresh()
 }
 
-func (t *trackpad) MouseUp(*desktop.MouseEvent) {
+// claimPendingClick turns a click still waiting out the double-click window into
+// a held button. Pressing the moment the second press lands is what makes the
+// grab happen at the double-click point; waiting for movement instead would lose
+// the start of a quick drag to the tap test below.
+func (t *trackpad) claimPendingClick() {
+	if t.pending == nil {
+		return
+	}
+	claimed := t.pending.Stop()
+	t.pending = nil // whether or not it fired, it is spent either way
+	if !claimed {
+		return // the window had passed and it went out as a plain click
+	}
+	t.held = true
+	t.pressedAt = time.Now()
+	t.snd.mouseCmd("mouse=PRESS(0,0)")
+}
+
+func (t *trackpad) MouseUp(e *desktop.MouseEvent) {
 	t.active = false
-	t.releaseHeld()
-	t.Refresh()
+	defer t.Refresh()
+
+	if t.held {
+		t.held = false
+		// A quick lift in place says it was a double-click after all. The button
+		// is still down, so DOUBLE_CLICK's two press/release pairs reach the
+		// target as up, down, up — pressing a held button is a no-op — which
+		// completes the double-click well inside the time it allows.
+		if time.Since(t.pressedAt) < doubleClickWindow && t.inOnePlace() {
+			t.snd.mouseCmd("mouse=DOUBLE_CLICK(0,0)")
+		} else {
+			t.snd.mouseCmd("mouse=RELEASE(0,0)")
+		}
+		return
+	}
+
+	if !t.inOnePlace() {
+		return // the gesture moved the pointer, so it was never a click
+	}
+	switch e.Button {
+	case desktop.MouseButtonSecondary:
+		t.snd.mouseCmd("mouse=RIGHT_CLICK(0,0)")
+	case desktop.MouseButtonPrimary:
+		// Held back: a press inside the window makes this a double-click, or the
+		// beginning of a drag. The timer talks straight to the sender, which any
+		// goroutine may do — handing the work to the UI thread instead would
+		// leave the click sitting there until the next event happened to arrive,
+		// and an idle window has none.
+		t.pending = time.AfterFunc(doubleClickWindow, func() {
+			t.snd.mouseCmd("mouse=CLICK(0,0)")
+		})
+	}
+}
+
+// inOnePlace reports whether the gesture has stayed put, within the slop a hand
+// on a mouse cannot help but add.
+func (t *trackpad) inOnePlace() bool {
+	return math.Hypot(float64(t.dx), float64(t.dy)) <= clickMoveSlop
 }
 
 func (t *trackpad) MouseIn(*desktop.MouseEvent)    { t.hovered = true; t.Refresh() }
@@ -1127,23 +1195,27 @@ func (t *trackpad) MouseOut()                      { t.hovered = false; t.Refres
 func (t *trackpad) Cursor() desktop.Cursor         { return desktop.CrosshairCursor }
 
 func (t *trackpad) Dragged(e *fyne.DragEvent) {
-	if t.shiftDown && !t.held {
-		// Press before any motion is sent, so the grab happens where the drag
-		// started rather than wherever it ends up.
-		t.held = true
-		t.snd.mouseCmd("mouse=PRESS(0,0)")
+	t.dx += e.Dragged.DX
+	t.dy += e.Dragged.DY
+	if t.held && t.inOnePlace() {
+		// Wobble under a press that hasn't really gone anywhere is held back:
+		// this may yet end as a double-click, which the target voids if the
+		// pointer strays between the two clicks. Once the slop is passed the
+		// event flows through whole, so a quick drag loses none of its motion.
+		return
 	}
 	t.snd.moveBy(e.Dragged.DX*t.sens, e.Dragged.DY*t.sens)
 }
 
+// DragEnd only tidies up the look. The button, if one is held, is let go in
+// MouseUp — which Fyne delivers first, and delivers whether a drag happened.
 func (t *trackpad) DragEnd() {
 	t.active = false
-	t.releaseHeld()
 	t.Refresh()
 }
 
-// releaseHeld lets a held button go. It is always paired with the PRESS in
-// Dragged — left down, it would stick the target machine's button.
+// releaseHeld lets a held button go. Losing focus mid-drag means no mouse-up
+// ever arrives, and the target would be left holding its button down.
 func (t *trackpad) releaseHeld() {
 	if !t.held {
 		return
@@ -1151,12 +1223,6 @@ func (t *trackpad) releaseHeld() {
 	t.held = false
 	t.snd.mouseCmd("mouse=RELEASE(0,0)")
 }
-
-// Fyne holds a tap back for its double-tap window when a widget accepts both,
-// so these arrive already told apart — the same job the web UI does by hand.
-func (t *trackpad) Tapped(*fyne.PointEvent)          { t.snd.mouseCmd("mouse=CLICK(0,0)") }
-func (t *trackpad) TappedSecondary(*fyne.PointEvent) { t.snd.mouseCmd("mouse=RIGHT_CLICK(0,0)") }
-func (t *trackpad) DoubleTapped(*fyne.PointEvent)    { t.snd.mouseCmd("mouse=DOUBLE_CLICK(0,0)") }
 
 func (t *trackpad) Scrolled(e *fyne.ScrollEvent) {
 	t.snd.scrollBy(e.Scrolled.DY / scrollUnitsPerNotch)
@@ -1429,9 +1495,13 @@ func main() {
 		c.SetOnKeyDown(ui.physKeyDown)
 		c.SetOnKeyUp(ui.physKeyUp)
 	}
-	// A key held as the window loses focus never reports its release, so drop
-	// the held set rather than leave a cap stuck looking pressed.
-	a.Lifecycle().SetOnExitedForeground(func() { ui.releaseAllPhysical() })
+	// A key or a button held as the window loses focus never reports its
+	// release: drop the held keys rather than leave a cap stuck looking pressed,
+	// and let go of the mouse button rather than leave the target holding it.
+	a.Lifecycle().SetOnExitedForeground(func() {
+		ui.releaseAllPhysical()
+		pad.releaseHeld()
+	})
 
 	w.SetContent(container.NewPadded(keyboard))
 	// The board and the pad keep their proportions, so any spare height is only

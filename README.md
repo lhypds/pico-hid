@@ -171,8 +171,8 @@ your tab as well. Two ways around it:
   isn't a keystroke, so nothing intercepts it.
 
 
-Desktop App
------------
+Virtual Keyboard
+----------------
 
 `client/keyboard.go` is a desktop window holding a full-size keyboard with a
 square trackpad beside it, for driving the board from a computer instead of a
@@ -247,10 +247,13 @@ which is what Num Lock chooses between on a real board.
 * Trackpad
 
 The gestures are the web UI's: dragging moves the pointer, click, right-click
-and double-click do the obvious thing, and the wheel scrolls the target machine.
-Holding shift while dragging keeps the left button down for the whole drag,
-which is how you drag something *on* the target rather than just moving the
-pointer over it.  
+and double-click do the obvious thing, and the wheel scrolls the target machine.  
+
+To drag something *on* the target rather than just move the pointer over it,
+click and then press again straight away, as you would to double-click, but keep
+the button down and move: the second press grabs and holds, and lifting lets go.
+Lifting quickly without moving completes the double-click instead. It is the same
+gesture the page uses from a touchscreen, which is where it comes from.  
 
 
 Macro
