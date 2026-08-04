@@ -137,35 +137,33 @@
       <div id="trackpad"></div>
     </main>
     <script>
-      // Every command goes through one queue, one request at a time. The board
-      // serves a single connection at a time and isn't listening at all while
-      // it holds a key down, so overlapping requests get refused — which showed
-      // up as dropped characters when typing quickly.
+      // One queue, one request at a time: the board serves a single connection
+      // and isn't listening while it holds a key down, so overlapping requests
+      // get refused — dropped characters when typing quickly.
       const SEND_GAP_MS = 70; // must exceed the board's per-key hold time
       const MAX_TRIES = 3;
-      // Bound each attempt: Safari (iOS especially) keeps half-open speculative
-      // connections a request can land on, and a fetch that never settles would
-      // wedge the queue for good. A timed-out attempt is retried under the same
-      // seq token, so the board won't run it twice. Long enough to sit out the
-      // board executing a long typing= command ahead of us.
+      // Bound each attempt: Safari keeps half-open speculative connections a
+      // request can land on, and a fetch that never settles would wedge the
+      // queue for good. A timed-out attempt retries under the same seq token,
+      // so the board won't run it twice.
       const SEND_TIMEOUT_MS = 6000;
 
       // No physical keyboard means no Cmd+W-style teardown to survive, so
-      // keepalive buys nothing here — and iOS WebKit has a history of dropping
-      // keepalive fetches, so don't ask for it where it can only hurt.
+      // keepalive buys nothing — and iOS WebKit has a history of dropping
+      // keepalive fetches.
       const TOUCH_ONLY = matchMedia("(hover: none) and (pointer: coarse)").matches;
 
       let inFlight = false;
       const queue = []; // discrete commands, delivered in order and never dropped
       let pendingDX = 0; // pointer movement, coalesced rather than queued
       let pendingDY = 0;
-      let pendingScroll = 0; // wheel notches, coalesced like movement; positive scrolls up
+      let pendingScroll = 0; // wheel notches, coalesced too; positive scrolls up
 
       // Delivery is at-least-once: a retry can re-send a command the board
-      // already ran (when the response was lost, not the request). So every
-      // command carries a unique seq token, stamped once per command and
-      // reused on retry, and the board skips a token it just handled. The
-      // random prefix keeps tokens unique across page reloads and tabs.
+      // already ran (response lost, not the request). Every command carries a
+      // seq token, stamped once and reused on retry, and the board skips a
+      // token it just handled. The random prefix keeps tokens unique across
+      // reloads and tabs.
       const SEQ_PREFIX = Math.random().toString(36).slice(2, 7);
       let seqCounter = 0;
 
@@ -180,9 +178,8 @@
         const opts = {
           method: "POST",
           body,
-          // Let the request outlive the page. A shortcut the browser insists on
-          // acting on (Cmd+W, Ctrl+W) tears the tab down mid-request, and
-          // without this the keystroke dies before reaching the board.
+          // Let the request outlive the page: Cmd+W tears the tab down
+          // mid-request, and without this the keystroke dies en route.
           keepalive: !TOUCH_ONLY,
         };
         if (typeof AbortSignal !== "undefined" && AbortSignal.timeout) {
@@ -200,8 +197,8 @@
       }
 
       // Typed characters merge into the last still-queued typing command, so
-      // fast typing doesn't build up one request per keystroke. Only items
-      // created here are extendable — merging into a keycode= would reorder.
+      // fast typing doesn't build one request per keystroke. Only items made
+      // here are extendable — merging into a keycode= would reorder.
       function enqueueTyping(text) {
         const last = queue[queue.length - 1];
         if (last && last.canExtend) {
@@ -217,9 +214,9 @@
 
         let item = queue.shift();
         if (!item) {
-          // Nothing queued: send accumulated movement or scrolling instead.
-          // Both are coalesced because a stale delta is worth less than a
-          // fresh one, so unlike a keystroke it's fine to merge or drop.
+          // Nothing queued: send accumulated movement or scrolling. Both are
+          // coalesced because a stale delta is worth less than a fresh one,
+          // so unlike a keystroke it's fine to merge or drop.
           const dx = Math.round(pendingDX);
           const dy = Math.round(pendingDY);
           const notches = Math.round(pendingScroll);
@@ -279,8 +276,7 @@
       }
 
       // Buttons must not take focus on tap: on iOS the blur would close the
-      // soft keyboard on every send. Click still fires with the default
-      // pointerdown behavior cancelled.
+      // soft keyboard on every send. Click still fires.
       sendBtn.addEventListener("pointerdown", (e) => e.preventDefault());
       kbBtn.addEventListener("pointerdown", (e) => e.preventDefault());
 
@@ -311,44 +307,53 @@
       });
 
       // --- Keyboard mirror mode ---
-      // Physical-key names, keyed by KeyboardEvent.code. Using .code rather
-      // than .key means we forward which key was pressed, not the character it
-      // produced, so the target machine applies its own layout — that's what
-      // makes shifted keys and shortcuts land correctly.
-      const KEY_BY_CODE = {
-        Space: "SPACE",
-        Enter: "ENTER",
-        NumpadEnter: "ENTER",
-        Tab: "TAB",
-        Backspace: "BACKSPACE",
-        Delete: "DELETE",
-        Escape: "ESCAPE",
-        Insert: "INSERT",
-        Home: "HOME",
-        End: "END",
-        PageUp: "PAGE_UP",
-        PageDown: "PAGE_DOWN",
-        CapsLock: "CAPS_LOCK",
-        PrintScreen: "PRINT_SCREEN",
-        ScrollLock: "SCROLL_LOCK",
-        Pause: "PAUSE",
-        ContextMenu: "APPLICATION",
-        ArrowUp: "UP",
-        ArrowDown: "DOWN",
-        ArrowLeft: "LEFT",
-        ArrowRight: "RIGHT",
-        Minus: "MINUS",
-        Equal: "EQUALS",
-        BracketLeft: "LEFT_BRACKET",
-        BracketRight: "RIGHT_BRACKET",
-        Backslash: "BACKSLASH",
-        Semicolon: "SEMICOLON",
-        Quote: "QUOTE",
-        Backquote: "GRAVE_ACCENT",
-        Comma: "COMMA",
-        Period: "PERIOD",
-        Slash: "FORWARD_SLASH",
+      // Keyed by KeyboardEvent.code rather than .key: we forward which
+      // physical key was pressed, not the character it produced, so the
+      // target machine applies its own layout — that's what makes shifted
+      // keys and shortcuts land correctly.
+      // code -> [name sent to the board, display label]
+      const KEYS = {
+        Space: ["SPACE", "␣"],
+        Enter: ["ENTER", "⏎"],
+        NumpadEnter: ["ENTER", "⏎"],
+        Tab: ["TAB", "⇥"],
+        Backspace: ["BACKSPACE", "⌫"],
+        Delete: ["DELETE", "⌦"],
+        Escape: ["ESCAPE", "⎋"],
+        Insert: ["INSERT", "Ins"],
+        Home: ["HOME", "↖"],
+        End: ["END", "↘"],
+        PageUp: ["PAGE_UP", "⇞"],
+        PageDown: ["PAGE_DOWN", "⇟"],
+        CapsLock: ["CAPS_LOCK", "⇪"],
+        PrintScreen: ["PRINT_SCREEN", "PrtSc"],
+        ScrollLock: ["SCROLL_LOCK", "ScrLk"],
+        Pause: ["PAUSE", "PAUSE"],
+        ContextMenu: ["APPLICATION", "▤"],
+        ArrowUp: ["UP", "↑"],
+        ArrowDown: ["DOWN", "↓"],
+        ArrowLeft: ["LEFT", "←"],
+        ArrowRight: ["RIGHT", "→"],
+        Minus: ["MINUS", "-"],
+        Equal: ["EQUALS", "="],
+        BracketLeft: ["LEFT_BRACKET", "["],
+        BracketRight: ["RIGHT_BRACKET", "]"],
+        Backslash: ["BACKSLASH", "\\"],
+        Semicolon: ["SEMICOLON", ";"],
+        Quote: ["QUOTE", "'"],
+        Backquote: ["GRAVE_ACCENT", "`"],
+        Comma: ["COMMA", ","],
+        Period: ["PERIOD", "."],
+        Slash: ["FORWARD_SLASH", "/"],
       };
+
+      function keyInfo(code) {
+        if (/^Key[A-Z]$/.test(code)) return [code.slice(3).toLowerCase(), code.slice(3)];
+        if (/^Digit[0-9]$/.test(code)) return [code.slice(5), code.slice(5)];
+        if (/^Numpad[0-9]$/.test(code)) return [code.slice(6), code.slice(6)];
+        if (/^F([1-9]|1[0-9]|2[0-4])$/.test(code)) return [code, code];
+        return KEYS[code] || null;
+      }
 
       const MODIFIER_CODES = new Set([
         "ControlLeft",
@@ -361,41 +366,9 @@
         "MetaRight",
       ]);
 
-      // Display only — macOS-style symbols for the key readout. The chord sent
-      // to the board still uses the plain names above.
+      // Display only — macOS-style symbols for the key readout. The chord
+      // sent to the board still uses the plain names.
       const MOD_SYMBOL = { CTRL: "^", ALT: "⌥", SHIFT: "⇧", GUI: "⌘" };
-      const KEY_LABEL = {
-        SPACE: "␣",
-        ENTER: "⏎",
-        TAB: "⇥",
-        BACKSPACE: "⌫",
-        DELETE: "⌦",
-        ESCAPE: "⎋",
-        INSERT: "Ins",
-        HOME: "↖",
-        END: "↘",
-        PAGE_UP: "⇞",
-        PAGE_DOWN: "⇟",
-        CAPS_LOCK: "⇪",
-        PRINT_SCREEN: "PrtSc",
-        SCROLL_LOCK: "ScrLk",
-        APPLICATION: "▤",
-        UP: "↑",
-        DOWN: "↓",
-        LEFT: "←",
-        RIGHT: "→",
-        MINUS: "-",
-        EQUALS: "=",
-        LEFT_BRACKET: "[",
-        RIGHT_BRACKET: "]",
-        BACKSLASH: "\\",
-        SEMICOLON: ";",
-        QUOTE: "'",
-        GRAVE_ACCENT: "`",
-        COMMA: ",",
-        PERIOD: ".",
-        FORWARD_SLASH: "/",
-      };
 
       let mirroring = false;
 
@@ -403,18 +376,6 @@
       // order Apple writes them in — so a plain join matches the convention.
       function modSymbols(mods) {
         return mods.map((m) => MOD_SYMBOL[m]).join("");
-      }
-
-      function keyLabel(name) {
-        return KEY_LABEL[name] || (name.length === 1 ? name.toUpperCase() : name);
-      }
-
-      function keyName(code) {
-        if (/^Key[A-Z]$/.test(code)) return code.slice(3).toLowerCase();
-        if (/^Digit[0-9]$/.test(code)) return code.slice(5);
-        if (/^Numpad[0-9]$/.test(code)) return code.slice(6);
-        if (/^F([1-9]|1[0-9]|2[0-4])$/.test(code)) return code;
-        return KEY_BY_CODE[code] || null;
       }
 
       function heldModifiers(e) {
@@ -428,7 +389,7 @@
 
       function onMirrorKey(e) {
         // Swallow every key while mirroring, so shortcuts act on the target
-        // machine instead of this browser. Note the OS keeps a few for itself
+        // machine instead of this browser. The OS keeps a few for itself
         // (Cmd+Tab, Alt+Tab) — those can't be forwarded.
         e.preventDefault();
         if (e.repeat) return; // don't flood the board with auto-repeat
@@ -439,25 +400,23 @@
           return;
         }
 
-        const name = keyName(e.code);
-        if (!name) {
+        const info = keyInfo(e.code);
+        if (!info) {
           textInput.value = e.code + " (unsupported)";
           return;
         }
 
-        textInput.value = modSymbols(mods) + keyLabel(name);
-        enqueue("keycode=" + mods.concat(name).join("+"));
+        textInput.value = modSymbols(mods) + info[1];
+        enqueue("keycode=" + mods.concat(info[0]).join("+"));
       }
 
-      // Browser-level shortcuts (Cmd+W, Cmd+R, Cmd+T, Cmd+Tab) are claimed by the
-      // browser before the page sees them, so preventDefault can't stop them.
-      // Keyboard Lock is the only thing that can, and it needs a secure context
-      // plus fullscreen — so it engages over HTTPS or localhost but not on the
-      // board's plain-HTTP page, hence the check rather than forcing fullscreen
-      // on HTTP users for no benefit. There deliberately is no beforeunload
-      // guard: it would prompt on every reload too, which is more annoying than
-      // the accidental close it protects against. The keystroke still reaches
-      // the board either way, because sendCommand uses keepalive.
+      // Browser-level shortcuts (Cmd+W, Cmd+R, Cmd+Tab) are claimed before
+      // the page sees them, so preventDefault can't stop them. Keyboard Lock
+      // is the only thing that can, and it needs a secure context plus
+      // fullscreen — so it engages over HTTPS or localhost but not on the
+      // board's plain-HTTP page. No beforeunload guard on purpose: it would
+      // prompt on every reload, and keepalive already gets the keystroke to
+      // the board through an accidental close.
       const canLockKeys = !!(navigator.keyboard && navigator.keyboard.lock);
       let tookFullscreen = false;
 
@@ -488,11 +447,10 @@
 
       // --- Soft mirroring (touch devices) ---
       // A soft keyboard can't be mirrored key-by-key: IMEs, swipe typing and
-      // autocorrect insert and rewrite text without producing usable keydown
-      // codes (Android reports 229/Unidentified for nearly everything). So on
-      // touch devices mirror the *field* instead of the keys: it stays
-      // editable, and whatever changes in it — characters typed, words
-      // swiped, autocorrections — is diffed and forwarded.
+      // autocorrect rewrite text without usable keydown codes (Android
+      // reports 229/Unidentified for nearly everything). So mirror the
+      // *field* instead of the keys: whatever changes in it is diffed and
+      // forwarded.
       let mirrorPrev = ""; // field content already forwarded to the target
       let composing = false; // mid-IME-composition edits aren't final yet
 
@@ -514,14 +472,13 @@
           suffix++;
         // Replay the edit: delete what left the field, type what entered it.
         // Both land at the *target's* cursor, so this assumes typing at the
-        // end of the field — which is what a phone keyboard does. Editing
-        // the middle of the field comes out wrong on the target.
+        // end of the field — which is what a phone keyboard does.
         for (let i = mirrorPrev.length - prefix - suffix; i > 0; i--) enqueue("keycode=BACKSPACE");
         const inserted = foldToAscii(next.slice(prefix, next.length - suffix));
         if (inserted) enqueueTyping(inserted);
         // The field is a display of the last keystroke, not an editor: keep
-        // just the final character. One character is still enough context to
-        // diff the next edit, and gives backspace something to delete.
+        // just the final character — still enough context to diff the next
+        // edit, and it gives backspace something to delete.
         const tail = next.slice(-1);
         textInput.value = tail;
         mirrorPrev = tail;
@@ -572,7 +529,7 @@
       const trackpad = document.getElementById("trackpad");
       trackpad.addEventListener("contextmenu", (e) => e.preventDefault());
 
-      const CLICK_MOVE_THRESHOLD = 6; // px per finger below which a gesture is a tap, not a drag
+      const CLICK_MOVE_THRESHOLD = 6; // px per finger below which a gesture is a tap
       const DOUBLE_CLICK_WINDOW_MS = 300;
       const SCROLL_PX_PER_NOTCH = 20; // finger travel that equals one wheel notch
 
@@ -598,9 +555,9 @@
           pendingDX = 0;
           pendingDY = 0;
         } else {
-          // A second finger turns the gesture into a scroll (or a two-finger
-          // tap): whatever movement the first finger accumulated is no longer
-          // a pointer move.
+          // A second finger turns the gesture into a scroll (or two-finger
+          // tap): the first finger's accumulated movement is no longer a
+          // pointer move.
           pendingDX = 0;
           pendingDY = 0;
         }
