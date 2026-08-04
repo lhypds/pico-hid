@@ -31,15 +31,6 @@ Setup
 
 4. Run `./reboot.sh` to reboot the board.
 
-Later uploads don't need `reboot.sh`: saving files onto the board triggers
-CircuitPython's auto-reload. That reload is a *soft* one, and on the Pico W it
-leaves the WiFi radio wedged — every reconnect fails with `Unknown failure 1`
-until a hard reset. `code.py` detects that state and hard-resets the board
-itself to recover, so right after an upload expect the CIRCUITPY drive to
-disconnect and remount once (macOS shows a "Disk Not Ejected Properly"
-warning — harmless here) and a `screen.sh` console to drop and need
-reopening. The board is back on WiFi a few seconds later.
-
 
 Monitoring
 ----------
@@ -105,16 +96,7 @@ Mouse event support:
    completing the held press into a double-click.  
 Note: the `x` and `y` is relative coordinate.  
 
-* De-duplication (optional)
-
-A command may carry a `seq=<token>&` prefix, e.g. `seq=k3f9-42&keycode=CTRL+c`.
-The board skips a command whose token matches the one it just executed, so a
-client that retries on a lost response (like the web UI) can't type a key
-twice. Commands without the prefix always execute.  
-
-
-Auto Movement
--------------
+* Auto Movement
 
 The board periodically jiggles the mouse every `MOUSE_MOVE_INTERVAL` seconds
 (set in `settings.toml`, defaults to 30 if unset). Whether it starts on boot is
@@ -122,6 +104,13 @@ controlled by `AUTOMOVE_AUTOSTART` in `settings.toml`: `1` (or unset) starts it
 automatically, `0` boots with it off. Either way it can be toggled remotely:  
 Send `automove=START` to start the auto mouse movement.  
 Send `automove=STOP` to stop it.  
+
+* De-duplication (optional)
+
+A command may carry a `seq=<token>&` prefix, e.g. `seq=k3f9-42&keycode=CTRL+c`.
+The board skips a command whose token matches the one it just executed, so a
+client that retries on a lost response (like the web UI) can't type a key
+twice. Commands without the prefix always execute.  
 
 
 Web UI
@@ -166,8 +155,9 @@ the field stays editable and whatever changes in it is forwarded live. The field
 only shows the last character typed — it's a display of what was sent, not an
 editor. Return sends Enter. Only characters a US layout can type are forwarded.
 
-**Limitation: shortcuts the browser reserves can't be intercepted.** `Cmd+W`
-(close tab), `Cmd+R`, `Cmd+T`, `Cmd+N`, `Cmd+Q` and `Cmd+Tab` are handled by the
+**Limitation: shortcuts the browser reserves can't be intercepted.**  
+
+`Cmd+W` (close tab), `Cmd+R`, `Cmd+T`, `Cmd+N`, `Cmd+Q` and `Cmd+Tab` are handled by the
 browser and the OS before the page is consulted, and `preventDefault()` on them is
 ignored — a deliberate security boundary, so no page-level fix exists. They are
 forwarded to the target machine *and* still act on your browser, so `Cmd+W` closes
