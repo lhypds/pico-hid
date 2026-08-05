@@ -15,6 +15,8 @@ CircuitPython, https://docs.circuitpython.org/en/latest/README.html
 Hardware Requirements
 ---------------------
 
+<img width="1280" height="1280" alt="202603270045_pico" src="https://github.com/user-attachments/assets/89578cca-fda1-4f4d-8fff-52c2eebbb5e8" />
+
 1. Raspberry Pi Pico W  
 2. USB cable (micro USB to USB-A/C to connect to PC)  
 
@@ -128,6 +130,8 @@ twice. Commands without the prefix always execute.
 Web UI
 ------
 
+<img width="960" height="1045" alt="202608050341_pico" src="https://github.com/user-attachments/assets/5c743fc2-034c-4612-ae45-af75616a891c" />
+
 Open the board's address in a browser (e.g. `http://ph-3f9a.local`). The page is
 `public/index.html` — one self-contained file, no build step, CSS and JS inlined so
 the board serves it in a single request.
@@ -185,6 +189,8 @@ your tab as well. Two ways around it:
 
 Virtual Keyboard
 ----------------
+
+<img width="2396" height="710" alt="202608050734_pico" src="https://github.com/user-attachments/assets/c3ae2e5d-b9b6-472d-acd3-50a16d6af349" />
 
 `keyboard/` is a desktop window holding a full-size keyboard with a
 square trackpad beside it, for driving the board from a computer instead of a
